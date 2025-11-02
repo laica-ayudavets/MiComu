@@ -64,7 +64,11 @@ export const insertIncidentSchema = createInsertSchema(incidents).omit({
   createdAt: true,
   updatedAt: true,
 });
+export const updateIncidentSchema = insertIncidentSchema.partial().omit({
+  tenantId: true,
+});
 export type InsertIncident = z.infer<typeof insertIncidentSchema>;
+export type UpdateIncident = z.infer<typeof updateIncidentSchema>;
 export type Incident = typeof incidents.$inferSelect;
 
 export const documents = pgTable("documents", {
@@ -85,7 +89,11 @@ export const insertDocumentSchema = createInsertSchema(documents).omit({
   id: true,
   createdAt: true,
 });
+export const updateDocumentSchema = insertDocumentSchema.partial().omit({
+  tenantId: true,
+});
 export type InsertDocument = z.infer<typeof insertDocumentSchema>;
+export type UpdateDocument = z.infer<typeof updateDocumentSchema>;
 export type Document = typeof documents.$inferSelect;
 
 export const agreements = pgTable("agreements", {
@@ -104,7 +112,11 @@ export const insertAgreementSchema = createInsertSchema(agreements).omit({
   id: true,
   createdAt: true,
 });
+export const updateAgreementSchema = insertAgreementSchema.partial().omit({
+  tenantId: true,
+});
 export type InsertAgreement = z.infer<typeof insertAgreementSchema>;
+export type UpdateAgreement = z.infer<typeof updateAgreementSchema>;
 export type Agreement = typeof agreements.$inferSelect;
 
 export const derramas = pgTable("derramas", {
@@ -118,11 +130,17 @@ export const derramas = pgTable("derramas", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const insertDerramaSchema = createInsertSchema(derramas).omit({
+export const insertDerramaSchema = createInsertSchema(derramas, {
+  dueDate: z.coerce.date(),
+}).omit({
   id: true,
   createdAt: true,
 });
+export const updateDerramaSchema = insertDerramaSchema.partial().omit({
+  tenantId: true,
+});
 export type InsertDerrama = z.infer<typeof insertDerramaSchema>;
+export type UpdateDerrama = z.infer<typeof updateDerramaSchema>;
 export type Derrama = typeof derramas.$inferSelect;
 
 export const derramaPayments = pgTable("derrama_payments", {
@@ -159,5 +177,9 @@ export const insertProviderSchema = createInsertSchema(providers).omit({
   id: true,
   createdAt: true,
 });
+export const updateProviderSchema = insertProviderSchema.partial().omit({
+  tenantId: true,
+});
 export type InsertProvider = z.infer<typeof insertProviderSchema>;
+export type UpdateProvider = z.infer<typeof updateProviderSchema>;
 export type Provider = typeof providers.$inferSelect;

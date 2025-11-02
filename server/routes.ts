@@ -3,34 +3,44 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { 
   insertIncidentSchema,
+  updateIncidentSchema,
   insertDocumentSchema,
+  updateDocumentSchema,
   insertAgreementSchema,
+  updateAgreementSchema,
   insertDerramaSchema,
+  updateDerramaSchema,
   insertDerramaPaymentSchema,
   insertProviderSchema,
+  updateProviderSchema,
   insertTenantSchema,
   insertUserSchema
 } from "@shared/schema";
 import { z } from "zod";
 
-const DEFAULT_TENANT_ID = "default-tenant";
+let DEFAULT_TENANT_ID: string;
 
 async function ensureDefaultTenant() {
-  let tenant = await storage.getTenant(DEFAULT_TENANT_ID);
+  let tenant = await storage.getTenantByDomain("demo");
   if (!tenant) {
-    tenant = await storage.createTenant({
-      name: "Comunidad Demo",
-      domain: "demo",
-      logo: null,
-      primaryColor: "#8b5cf6",
-      accentColor: "#fb923c",
-    });
+    try {
+      tenant = await storage.createTenant({
+        name: "Comunidad Demo",
+        domain: "demo",
+        logo: null,
+        primaryColor: "#8b5cf6",
+        accentColor: "#fb923c",
+      });
+    } catch (error) {
+      tenant = await storage.getTenantByDomain("demo");
+    }
   }
   return tenant;
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  await ensureDefaultTenant();
+  const defaultTenant = await ensureDefaultTenant();
+  DEFAULT_TENANT_ID = defaultTenant!.id;
 
   const getTenantId = (req: Request) => {
     return (req.user as any)?.tenantId || DEFAULT_TENANT_ID;
@@ -90,12 +100,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/incidents/:id", async (req: Request, res: Response) => {
     try {
       const tenantId = getTenantId(req);
-      const incident = await storage.updateIncident(req.params.id, tenantId, req.body);
+      const data = updateIncidentSchema.parse(req.body);
+      const incident = await storage.updateIncident(req.params.id, tenantId, data);
       if (!incident) {
         return res.status(404).json({ error: "Incident not found" });
       }
       res.json(incident);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation error", details: error.errors });
+      }
       console.error("Error updating incident:", error);
       res.status(500).json({ error: "Internal server error" });
     }
@@ -158,12 +172,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/documents/:id", async (req: Request, res: Response) => {
     try {
       const tenantId = getTenantId(req);
-      const document = await storage.updateDocument(req.params.id, tenantId, req.body);
+      const data = updateDocumentSchema.parse(req.body);
+      const document = await storage.updateDocument(req.params.id, tenantId, data);
       if (!document) {
         return res.status(404).json({ error: "Document not found" });
       }
       res.json(document);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation error", details: error.errors });
+      }
       console.error("Error updating document:", error);
       res.status(500).json({ error: "Internal server error" });
     }
@@ -217,12 +235,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/agreements/:id", async (req: Request, res: Response) => {
     try {
       const tenantId = getTenantId(req);
-      const agreement = await storage.updateAgreement(req.params.id, tenantId, req.body);
+      const data = updateAgreementSchema.parse(req.body);
+      const agreement = await storage.updateAgreement(req.params.id, tenantId, data);
       if (!agreement) {
         return res.status(404).json({ error: "Agreement not found" });
       }
       res.json(agreement);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation error", details: error.errors });
+      }
       console.error("Error updating agreement:", error);
       res.status(500).json({ error: "Internal server error" });
     }
@@ -285,12 +307,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/derramas/:id", async (req: Request, res: Response) => {
     try {
       const tenantId = getTenantId(req);
-      const derrama = await storage.updateDerrama(req.params.id, tenantId, req.body);
+      const data = updateDerramaSchema.parse(req.body);
+      const derrama = await storage.updateDerrama(req.params.id, tenantId, data);
       if (!derrama) {
         return res.status(404).json({ error: "Derrama not found" });
       }
       res.json(derrama);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation error", details: error.errors });
+      }
       console.error("Error updating derrama:", error);
       res.status(500).json({ error: "Internal server error" });
     }
@@ -393,12 +419,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/providers/:id", async (req: Request, res: Response) => {
     try {
       const tenantId = getTenantId(req);
-      const provider = await storage.updateProvider(req.params.id, tenantId, req.body);
+      const data = updateProviderSchema.parse(req.body);
+      const provider = await storage.updateProvider(req.params.id, tenantId, data);
       if (!provider) {
         return res.status(404).json({ error: "Provider not found" });
       }
       res.json(provider);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation error", details: error.errors });
+      }
       console.error("Error updating provider:", error);
       res.status(500).json({ error: "Internal server error" });
     }

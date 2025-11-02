@@ -4,45 +4,33 @@ import { IncidentCard } from "@/components/incident-card";
 import { AlertCircle, FileText, CheckSquare, DollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useQuery } from "@tanstack/react-query";
+import type { Incident } from "@shared/schema";
+
+interface DashboardStats {
+  totalIncidents: number;
+  activeIncidents: number;
+  totalDocuments: number;
+  activeDerramas: number;
+}
 
 export default function Dashboard() {
-  //todo: remove mock functionality
-  const stats = [
-    { title: "Incidencias Activas", value: 12, icon: AlertCircle, trend: { value: 15, isPositive: false } },
-    { title: "Documentos", value: 48, icon: FileText, trend: { value: 8, isPositive: true } },
-    { title: "Acuerdos Pendientes", value: 7, icon: CheckSquare, trend: { value: 12, isPositive: false } },
-    { title: "Derramas Activas", value: 2, icon: DollarSign },
-  ];
+  const { data: stats, isLoading: statsLoading } = useQuery<DashboardStats>({
+    queryKey: ["/api/dashboard/stats"],
+  });
 
-  const recentIncidents = [
-    {
-      id: "1",
-      title: "Fuga de agua en el portal principal",
-      status: "en_curso" as const,
-      priority: "alta" as const,
-      category: "Fontanería",
-      reporter: "María García",
-      date: "hace 2 horas",
-    },
-    {
-      id: "2",
-      title: "Luz fundida en escalera 3ª planta",
-      status: "pendiente" as const,
-      priority: "media" as const,
-      category: "Electricidad",
-      reporter: "Juan Pérez",
-      date: "hace 5 horas",
-    },
-    {
-      id: "3",
-      title: "Ruidos en ascensor B",
-      status: "pendiente" as const,
-      priority: "baja" as const,
-      category: "Mantenimiento",
-      reporter: "Ana López",
-      date: "hace 1 día",
-    },
-  ];
+  const { data: incidents, isLoading: incidentsLoading } = useQuery<Incident[]>({
+    queryKey: ["/api/incidents"],
+  });
+
+  const recentIncidents = incidents?.slice(0, 3) || [];
+
+  const statsData = stats ? [
+    { title: "Total Incidencias", value: stats.totalIncidents, icon: AlertCircle },
+    { title: "Incidencias Activas", value: stats.activeIncidents, icon: AlertCircle },
+    { title: "Documentos", value: stats.totalDocuments, icon: FileText },
+    { title: "Derramas Activas", value: stats.activeDerramas, icon: DollarSign },
+  ] : [];
 
   const activities = [
     {
@@ -88,9 +76,19 @@ export default function Dashboard() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => (
-          <StatCard key={stat.title} {...stat} />
-        ))}
+        {statsLoading ? (
+          <>
+            {[...Array(4)].map((_, i) => (
+              <Card key={i} className="h-32 animate-pulse border-0 shadow-md">
+                <CardContent className="p-6" />
+              </Card>
+            ))}
+          </>
+        ) : (
+          statsData.map((stat) => (
+            <StatCard key={stat.title} {...stat} />
+          ))
+        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -103,13 +101,29 @@ export default function Dashboard() {
               </Button>
             </CardHeader>
             <CardContent className="space-y-3">
-              {recentIncidents.map((incident) => (
-                <IncidentCard
-                  key={incident.id}
-                  {...incident}
-                  onClick={() => console.log('Incident clicked:', incident.id)}
-                />
-              ))}
+              {incidentsLoading ? (
+                <>
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} className="h-24 bg-muted/20 animate-pulse rounded-md" />
+                  ))}
+                </>
+              ) : recentIncidents.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">No hay incidencias recientes</p>
+              ) : (
+                recentIncidents.map((incident) => (
+                  <IncidentCard
+                    key={incident.id}
+                    id={incident.id}
+                    title={incident.title}
+                    status={incident.status}
+                    priority={incident.priority}
+                    category={incident.category}
+                    reporter="Usuario"
+                    date={new Date(incident.createdAt).toLocaleDateString('es-ES')}
+                    onClick={() => console.log('Incident clicked:', incident.id)}
+                  />
+                ))
+              )}
             </CardContent>
           </Card>
         </div>

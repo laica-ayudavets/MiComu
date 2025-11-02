@@ -7,10 +7,10 @@ interface ProviderCardProps {
   id: string;
   name: string;
   category: string;
-  email: string;
-  phone?: string;
+  email?: string | null;
+  phone?: string | null;
   rating?: number;
-  servicesCount?: number;
+  servicesCount?: number | null;
   onContact?: () => void;
 }
 
@@ -43,10 +43,12 @@ export function ProviderCard({
             )}
           </div>
           <div className="space-y-1">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Mail className="w-3 h-3" />
-              <span className="truncate">{email}</span>
-            </div>
+            {email && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Mail className="w-3 h-3" />
+                <span className="truncate">{email}</span>
+              </div>
+            )}
             {phone && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Phone className="w-3 h-3" />
