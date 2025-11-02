@@ -11,6 +11,7 @@ import {
   insertDerramaSchema,
   updateDerramaSchema,
   insertDerramaPaymentSchema,
+  updateDerramaPaymentSchema,
   insertProviderSchema,
   updateProviderSchema,
   insertTenantSchema,
@@ -365,12 +366,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/payments/:id", async (req: Request, res: Response) => {
     try {
-      const payment = await storage.updateDerramaPayment(req.params.id, req.body);
+      const tenantId = getTenantId(req);
+      const data = updateDerramaPaymentSchema.parse(req.body);
+      const payment = await storage.updateDerramaPayment(req.params.id, tenantId, data);
       if (!payment) {
         return res.status(404).json({ error: "Payment not found" });
       }
       res.json(payment);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation error", details: error.errors });
+      }
       console.error("Error updating payment:", error);
       res.status(500).json({ error: "Internal server error" });
     }

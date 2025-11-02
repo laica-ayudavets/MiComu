@@ -157,7 +157,12 @@ export const insertDerramaPaymentSchema = createInsertSchema(derramaPayments).om
   id: true,
   createdAt: true,
 });
+export const updateDerramaPaymentSchema = insertDerramaPaymentSchema.partial().omit({
+  derramaId: true,
+  userId: true,
+});
 export type InsertDerramaPayment = z.infer<typeof insertDerramaPaymentSchema>;
+export type UpdateDerramaPayment = z.infer<typeof updateDerramaPaymentSchema>;
 export type DerramaPayment = typeof derramaPayments.$inferSelect;
 
 export const providers = pgTable("providers", {

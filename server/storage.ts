@@ -63,7 +63,7 @@ export interface IStorage {
   
   getDerramaPayments(derramaId: string): Promise<DerramaPayment[]>;
   createDerramaPayment(payment: InsertDerramaPayment): Promise<DerramaPayment>;
-  updateDerramaPayment(id: string, updates: Partial<InsertDerramaPayment>): Promise<DerramaPayment | undefined>;
+  updateDerramaPayment(id: string, tenantId: string, updates: Partial<InsertDerramaPayment>): Promise<DerramaPayment | undefined>;
   
   getProviders(tenantId: string): Promise<Provider[]>;
   getProvider(id: string, tenantId: string): Promise<Provider | undefined>;
@@ -257,10 +257,23 @@ export class DbStorage implements IStorage {
     return result[0];
   }
 
-  async updateDerramaPayment(id: string, updates: Partial<InsertDerramaPayment>): Promise<DerramaPayment | undefined> {
+  async updateDerramaPayment(id: string, tenantId: string, updates: Partial<InsertDerramaPayment>): Promise<DerramaPayment | undefined> {
     const result = await db.update(derramaPayments)
       .set(updates)
-      .where(eq(derramaPayments.id, id))
+      .where(
+        and(
+          eq(derramaPayments.id, id),
+          eq(
+            derramaPayments.derramaId,
+            db.select({ id: derramas.id })
+              .from(derramas)
+              .where(and(
+                eq(derramas.id, derramaPayments.derramaId),
+                eq(derramas.tenantId, tenantId)
+              ))
+          )
+        )
+      )
       .returning();
     return result[0];
   }
