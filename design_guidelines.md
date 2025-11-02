@@ -248,15 +248,93 @@ Two-column: nav (256px) + content, sticky save/cancel (top-right)
 
 ## Color & Visual System
 
-**Semantic Colors** (use tenant-configurable primaries):
-- Primary: CTAs, active states
-- Success: confirmations, paid status
-- Warning: pending, approaching deadlines
-- Danger: errors, overdue, destructive actions
-- Muted: secondary text, borders
+### Paleta de Colores Base
 
-**Elevation**: `shadow-sm` (cards), `shadow-md` (hover), `shadow-lg` (modals)
+**Colores Primarios** - Tonos difuminados de morado y naranja:
 
-**Borders**: Subtle separators, 4px accent for priority/status
+**Morado (Primary)** - `hsl(270° 65% 55%)`:
+- Representa profesionalismo, tecnología e innovación
+- Usado en: Botones principales, encabezados, elementos interactivos
+- Modo claro: Morado medio difuminado (65% saturación)
+- Modo oscuro: Morado más brillante (70% saturación, 60% luminosidad)
 
-**States**: Hover (background shift), active (fill), disabled (opacity-50)
+**Naranja (Accent)** - `hsl(25° 85% 60%)`:
+- Aporta calidez, energía y dinamismo
+- Usado en: Acentos, badges secundarios, elementos de énfasis
+- Modo claro: Naranja/coral difuminado (85% saturación)
+- Modo oscuro: Naranja cálido (75% saturación)
+
+### Aplicación de Gradientes
+
+**Principio fundamental**: Usar opacidades bajas (5-20%) para crear efectos difuminados sutiles
+
+**Gradientes principales**:
+- `from-primary/10 to-primary/5` - Fondo sutil morado
+- `from-accent/10 to-accent/5` - Fondo sutil naranja
+- `from-primary/10 via-accent/5 to-primary/5` - Transición morado-naranja
+- `from-primary to-accent` - Gradiente completo para CTAs importantes
+
+**Ubicaciones**:
+- **Hero sections**: Overlay con `from-primary/90 via-primary/70 to-accent/80`
+- **Backgrounds de página**: `from-background via-primary/[0.02] to-accent/[0.02]`
+- **Cards**: Overlay interno con gradientes al 5-10% de opacidad
+- **Buttons primarios**: `bg-gradient-to-r from-primary to-accent`
+- **Iconos**: Contenedores con `bg-gradient-to-br from-primary to-accent`
+
+### Efectos Visuales Avanzados
+
+**Glassmorphism**:
+- `backdrop-blur-md` para efecto de cristal
+- Backgrounds semi-transparentes: `bg-white/10` o `bg-card/50`
+- Bordes sutiles: `border border-white/20` o `border-primary/20`
+- Usado en: Hero CTAs, overlays, elementos flotantes
+
+**Sombras con Color**:
+- `shadow-[inset_4px_0_8px_-2px_rgba(139,92,246,0.1)]` - Sombra interna morada
+- Glow effects: Gradiente blur detrás de progress bars
+- Elevación: Sombras más pronunciadas en hover
+
+**Text Gradients**:
+- Títulos principales: `bg-clip-text text-transparent bg-gradient-to-r from-primary via-accent to-primary`
+- Números/valores: `bg-gradient-to-r from-foreground to-foreground/80`
+
+### Semantic Colors
+
+**Estados con gradientes**:
+- Success: `bg-gradient-to-r from-success/20 to-success/10` + border
+- Warning: `bg-gradient-to-r from-warning/20 to-warning/10` + border
+- Info: `bg-gradient-to-r from-info/20 to-info/10` + border
+- Destructive: Mantiene color sólido para claridad
+
+### Componentes Específicos
+
+**Stat Cards**:
+- Gradientes variados según título (4 opciones rotativas)
+- Iconos con gradiente `from-primary to-accent/60`
+- Background overlay con gradiente específico
+
+**Badges**:
+- `bg-gradient-to-r from-primary/15 to-accent/15`
+- Border: `border-primary/20`
+- Estados específicos mantienen sus colores pero con gradiente
+
+**Progress Bars**:
+- Barra principal con colores estándar
+- Glow effect: Gradiente blur `from-primary via-accent to-primary` al 20% opacidad
+
+**Elevation**: 
+- Sin bordes (`border-0`) en la mayoría de cards
+- `shadow-md` por defecto
+- `shadow-lg` en hover
+- `shadow-xl` en modals
+
+**Borders**: 
+- Eliminados en cards principales
+- Bordes de color en badges y estados: `border-primary/20`
+- 4px left border con sombra interna en priority
+
+**States**: 
+- Hover: `hover-elevate` + shadow increase
+- Active: `active-elevate-2`
+- Disabled: `opacity-50`
+- Images: `group-hover:scale-110` con transición suave

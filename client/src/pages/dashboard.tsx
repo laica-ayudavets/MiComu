@@ -77,12 +77,14 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="p-6 space-y-6" data-testid="page-dashboard">
-      <div>
-        <h1 className="text-3xl font-semibold">Dashboard</h1>
-        <p className="text-muted-foreground mt-1">
-          Resumen de la actividad de tu comunidad
-        </p>
+    <div className="p-6 space-y-6 bg-gradient-to-br from-background via-primary/[0.02] to-accent/[0.02] min-h-full" data-testid="page-dashboard">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary via-accent to-primary">Dashboard</h1>
+          <p className="text-muted-foreground mt-2">
+            Resumen de la actividad de tu comunidad
+          </p>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

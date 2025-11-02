@@ -16,9 +16,9 @@ interface IncidentCardProps {
 }
 
 const statusColors = {
-  pendiente: "bg-warning/10 text-warning hover:bg-warning/20",
-  en_curso: "bg-info/10 text-info hover:bg-info/20",
-  resuelto: "bg-success/10 text-success hover:bg-success/20",
+  pendiente: "bg-gradient-to-r from-warning/20 to-warning/10 text-warning border border-warning/20",
+  en_curso: "bg-gradient-to-r from-info/20 to-info/10 text-info border border-info/20",
+  resuelto: "bg-gradient-to-r from-success/20 to-success/10 text-success border border-success/20",
 };
 
 const statusLabels = {
@@ -28,9 +28,9 @@ const statusLabels = {
 };
 
 const priorityColors = {
-  alta: "border-l-4 border-l-destructive",
-  media: "border-l-4 border-l-warning",
-  baja: "border-l-4 border-l-muted",
+  alta: "border-l-4 border-l-destructive shadow-[inset_4px_0_8px_-2px_rgba(239,68,68,0.1)]",
+  media: "border-l-4 border-l-warning shadow-[inset_4px_0_8px_-2px_rgba(245,158,11,0.1)]",
+  baja: "border-l-4 border-l-muted shadow-[inset_4px_0_8px_-2px_rgba(0,0,0,0.05)]",
 };
 
 export function IncidentCard({

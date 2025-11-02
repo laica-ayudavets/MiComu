@@ -25,13 +25,13 @@ export function ProviderCard({
   onContact,
 }: ProviderCardProps) {
   return (
-    <Card className="hover-elevate" data-testid={`card-provider-${id}`}>
+    <Card className="hover-elevate border-0 shadow-md hover:shadow-lg transition-all duration-300" data-testid={`card-provider-${id}`}>
       <CardContent className="p-4">
         <div className="space-y-3">
           <div className="flex items-start justify-between gap-2">
             <div className="flex-1 min-w-0">
               <h3 className="font-medium text-base truncate">{name}</h3>
-              <Badge variant="secondary" className="mt-1">
+              <Badge variant="secondary" className="mt-1 bg-gradient-to-r from-primary/15 to-accent/15 border border-primary/20">
                 {category}
               </Badge>
             </div>

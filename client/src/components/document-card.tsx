@@ -34,11 +34,11 @@ export function DocumentCard({
   onAnalyze,
 }: DocumentCardProps) {
   return (
-    <Card className="hover-elevate" data-testid={`card-document-${id}`}>
+    <Card className="hover-elevate border-0 shadow-md hover:shadow-lg transition-all duration-300" data-testid={`card-document-${id}`}>
       <CardContent className="p-4">
         <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
-            <FileText className="w-5 h-5 text-primary" />
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center flex-shrink-0 shadow-md">
+            <FileText className="w-5 h-5 text-white" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2">
