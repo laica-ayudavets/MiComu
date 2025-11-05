@@ -18,6 +18,10 @@ import {
   type InsertDerramaPayment,
   type Provider,
   type InsertProvider,
+  type QuotaType,
+  type InsertQuotaType,
+  type QuotaAssignment,
+  type InsertQuotaAssignment,
   users,
   propertyCompanies,
   communities,
@@ -26,7 +30,9 @@ import {
   agreements,
   derramas,
   derramaPayments,
-  providers
+  providers,
+  quotaTypes,
+  quotaAssignments
 } from "@shared/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 
@@ -88,6 +94,22 @@ export interface IStorage {
   createProvider(provider: InsertProvider): Promise<Provider>;
   updateProvider(id: string, communityId: string, updates: Partial<InsertProvider>): Promise<Provider | undefined>;
   deleteProvider(id: string, communityId: string): Promise<boolean>;
+  
+  // Quota Type management (community-scoped)
+  getQuotaTypes(communityId: string): Promise<QuotaType[]>;
+  getQuotaType(id: string, communityId: string): Promise<QuotaType | undefined>;
+  createQuotaType(quotaType: InsertQuotaType): Promise<QuotaType>;
+  updateQuotaType(id: string, communityId: string, updates: Partial<InsertQuotaType>): Promise<QuotaType | undefined>;
+  deleteQuotaType(id: string, communityId: string): Promise<boolean>;
+  
+  // Quota Assignment management (community-scoped)
+  getQuotaAssignments(communityId: string): Promise<QuotaAssignment[]>;
+  getQuotaAssignment(id: string, communityId: string): Promise<QuotaAssignment | undefined>;
+  getQuotaAssignmentsByUser(userId: string, communityId: string): Promise<QuotaAssignment[]>;
+  getQuotaAssignmentsByQuotaType(quotaTypeId: string, communityId: string): Promise<QuotaAssignment[]>;
+  createQuotaAssignment(assignment: InsertQuotaAssignment): Promise<QuotaAssignment>;
+  updateQuotaAssignment(id: string, communityId: string, updates: Partial<InsertQuotaAssignment>): Promise<QuotaAssignment | undefined>;
+  deleteQuotaAssignment(id: string, communityId: string): Promise<boolean>;
   
   // Dashboard stats (community-scoped)
   getDashboardStats(communityId: string): Promise<{
@@ -367,6 +389,84 @@ export class DbStorage implements IStorage {
   async deleteProvider(id: string, communityId: string): Promise<boolean> {
     const result = await db.delete(providers)
       .where(and(eq(providers.id, id), eq(providers.communityId, communityId)));
+    return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  // Quota Type methods (community-scoped)
+  async getQuotaTypes(communityId: string): Promise<QuotaType[]> {
+    return db.select().from(quotaTypes)
+      .where(eq(quotaTypes.communityId, communityId))
+      .orderBy(desc(quotaTypes.createdAt));
+  }
+
+  async getQuotaType(id: string, communityId: string): Promise<QuotaType | undefined> {
+    const result = await db.select().from(quotaTypes)
+      .where(and(eq(quotaTypes.id, id), eq(quotaTypes.communityId, communityId)))
+      .limit(1);
+    return result[0];
+  }
+
+  async createQuotaType(quotaType: InsertQuotaType): Promise<QuotaType> {
+    const result = await db.insert(quotaTypes).values(quotaType).returning();
+    return result[0];
+  }
+
+  async updateQuotaType(id: string, communityId: string, updates: Partial<InsertQuotaType>): Promise<QuotaType | undefined> {
+    const result = await db.update(quotaTypes)
+      .set(updates)
+      .where(and(eq(quotaTypes.id, id), eq(quotaTypes.communityId, communityId)))
+      .returning();
+    return result[0];
+  }
+
+  async deleteQuotaType(id: string, communityId: string): Promise<boolean> {
+    const result = await db.delete(quotaTypes)
+      .where(and(eq(quotaTypes.id, id), eq(quotaTypes.communityId, communityId)));
+    return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  // Quota Assignment methods (community-scoped)
+  async getQuotaAssignments(communityId: string): Promise<QuotaAssignment[]> {
+    return db.select().from(quotaAssignments)
+      .where(eq(quotaAssignments.communityId, communityId))
+      .orderBy(desc(quotaAssignments.createdAt));
+  }
+
+  async getQuotaAssignment(id: string, communityId: string): Promise<QuotaAssignment | undefined> {
+    const result = await db.select().from(quotaAssignments)
+      .where(and(eq(quotaAssignments.id, id), eq(quotaAssignments.communityId, communityId)))
+      .limit(1);
+    return result[0];
+  }
+
+  async getQuotaAssignmentsByUser(userId: string, communityId: string): Promise<QuotaAssignment[]> {
+    return db.select().from(quotaAssignments)
+      .where(and(eq(quotaAssignments.userId, userId), eq(quotaAssignments.communityId, communityId)))
+      .orderBy(desc(quotaAssignments.dueDate));
+  }
+
+  async getQuotaAssignmentsByQuotaType(quotaTypeId: string, communityId: string): Promise<QuotaAssignment[]> {
+    return db.select().from(quotaAssignments)
+      .where(and(eq(quotaAssignments.quotaTypeId, quotaTypeId), eq(quotaAssignments.communityId, communityId)))
+      .orderBy(desc(quotaAssignments.dueDate));
+  }
+
+  async createQuotaAssignment(assignment: InsertQuotaAssignment): Promise<QuotaAssignment> {
+    const result = await db.insert(quotaAssignments).values(assignment).returning();
+    return result[0];
+  }
+
+  async updateQuotaAssignment(id: string, communityId: string, updates: Partial<InsertQuotaAssignment>): Promise<QuotaAssignment | undefined> {
+    const result = await db.update(quotaAssignments)
+      .set(updates)
+      .where(and(eq(quotaAssignments.id, id), eq(quotaAssignments.communityId, communityId)))
+      .returning();
+    return result[0];
+  }
+
+  async deleteQuotaAssignment(id: string, communityId: string): Promise<boolean> {
+    const result = await db.delete(quotaAssignments)
+      .where(and(eq(quotaAssignments.id, id), eq(quotaAssignments.communityId, communityId)));
     return result.rowCount !== null && result.rowCount > 0;
   }
 
