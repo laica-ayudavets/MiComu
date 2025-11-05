@@ -22,11 +22,14 @@ import { Plus, Pencil, Trash2, AlertCircle, CheckCircle, Clock, Euro, CalendarIc
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
-const quotaTypeFormSchema = insertQuotaTypeSchema.omit({ communityId: true });
+const quotaTypeFormSchema = insertQuotaTypeSchema.omit({ communityId: true }).extend({
+  description: z.string().optional().transform(val => val || ""),
+});
 type QuotaTypeFormValues = z.infer<typeof quotaTypeFormSchema>;
 
 const quotaAssignmentFormSchema = insertQuotaAssignmentSchema.omit({ communityId: true }).extend({
   dueDate: z.date(),
+  notes: z.string().optional().transform(val => val || ""),
 });
 type QuotaAssignmentFormValues = z.infer<typeof quotaAssignmentFormSchema>;
 

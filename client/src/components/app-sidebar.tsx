@@ -5,6 +5,7 @@ import {
   AlertCircle,
   Users,
   DollarSign,
+  Euro,
   LayoutDashboard,
   Settings,
 } from "lucide-react";
@@ -53,6 +54,11 @@ const menuItems = [
     title: "Proveedores",
     url: "/proveedores",
     icon: Users,
+  },
+  {
+    title: "Cuotas",
+    url: "/cuotas",
+    icon: Euro,
   },
 ];
 

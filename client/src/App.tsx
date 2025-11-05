@@ -19,6 +19,7 @@ import Documentos from "@/pages/documentos";
 import Acuerdos from "@/pages/acuerdos";
 import Derramas from "@/pages/derramas";
 import Proveedores from "@/pages/proveedores";
+import Cuotas from "@/pages/cuotas";
 import Configuracion from "@/pages/configuracion";
 
 function AppLayout({ children }: { children: React.ReactNode }) {
@@ -99,6 +100,11 @@ function Router() {
       <Route path="/proveedores">
         <AppLayout>
           <Proveedores />
+        </AppLayout>
+      </Route>
+      <Route path="/cuotas">
+        <AppLayout>
+          <Cuotas />
         </AppLayout>
       </Route>
       <Route path="/configuracion">

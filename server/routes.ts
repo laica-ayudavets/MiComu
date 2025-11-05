@@ -2,6 +2,7 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import passport from "passport";
 import { storage } from "./storage";
+import { db } from "./db";
 import { 
   hashPassword,
   getUserContext,
@@ -30,9 +31,11 @@ import {
   insertPropertyCompanySchema,
   insertCommunitySchema,
   insertUserSchema,
+  users,
   type User
 } from "@shared/schema";
 import { z } from "zod";
+import { eq, desc } from "drizzle-orm";
 
 let DEFAULT_PROPERTY_COMPANY_ID: string;
 let DEFAULT_COMMUNITY_ID: string;
@@ -693,6 +696,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting provider:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Users endpoints (for listing residents in a community)
+  app.get("/api/users", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const communityId = getCommunityId(req);
+      const allUsers = await db.select().from(users)
+        .where(eq(users.communityId, communityId))
+        .orderBy(desc(users.createdAt));
+      
+      const usersWithoutPasswords = allUsers.map(({ password, ...user }) => user);
+      res.json(usersWithoutPasswords);
+    } catch (error) {
+      console.error("Error fetching users:", error);
       res.status(500).json({ error: "Internal server error" });
     }
   });
