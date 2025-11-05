@@ -52,7 +52,7 @@ import type { Derrama, InsertDerrama } from "@shared/schema";
 import { insertDerramaSchema } from "@shared/schema";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
-import { useCommunities, useUser } from "@/hooks/use-auth";
+import { useCommunities, useUser, useCurrentCommunity } from "@/hooks/use-auth";
 
 const formSchema = z.object({
   title: z.string().min(1, "El título es requerido"),
@@ -73,6 +73,7 @@ export default function Derramas() {
   const { toast } = useToast();
   const { data: user } = useUser();
   const { data: communities = [] } = useCommunities();
+  const { data: currentCommunity } = useCurrentCommunity();
 
   const { data: derramas = [], isLoading } = useQuery<Derrama[]>({
     queryKey: ["/api/derramas"],
@@ -89,7 +90,7 @@ export default function Derramas() {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: FormValues) => {
+    mutationFn: async (data: FormValues & { communityId: string }) => {
       const res = await apiRequest("POST", "/api/derramas", data);
       return res.json();
     },
@@ -177,10 +178,18 @@ export default function Derramas() {
   }, [derramas, searchTerm, communityFilter, dateFrom, dateTo]);
 
   const onSubmit = (data: FormValues) => {
+    if (!currentCommunity?.id) {
+      toast({
+        title: "Error",
+        description: "No hay una comunidad seleccionada",
+        variant: "destructive",
+      });
+      return;
+    }
     if (editingDerrama) {
       updateMutation.mutate({ id: editingDerrama.id, data });
     } else {
-      createMutation.mutate(data);
+      createMutation.mutate({ ...data, communityId: currentCommunity.id });
     }
   };
 

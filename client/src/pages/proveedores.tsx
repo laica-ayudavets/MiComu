@@ -43,6 +43,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { Provider, InsertProvider } from "@shared/schema";
 import { insertProviderSchema } from "@shared/schema";
 import { z } from "zod";
+import { useCurrentCommunity } from "@/hooks/use-auth";
 
 const formSchema = insertProviderSchema.extend({
   name: z.string().min(1, "El nombre es requerido"),
@@ -61,6 +62,7 @@ export default function Proveedores() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProvider, setEditingProvider] = useState<Provider | null>(null);
   const { toast } = useToast();
+  const { data: currentCommunity } = useCurrentCommunity();
 
   const { data: providers = [], isLoading } = useQuery<Provider[]>({
     queryKey: ["/api/providers"],
@@ -69,13 +71,13 @@ export default function Proveedores() {
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      communityId: currentCommunity?.id || "",
       name: "",
       category: "",
       phone: "",
       email: "",
       address: "",
       rating: null,
-      tenantId: "default-tenant",
       servicesCount: 0,
     },
   });
@@ -164,23 +166,31 @@ export default function Proveedores() {
   }, [providers]);
 
   const onSubmit = (data: FormValues) => {
+    if (!currentCommunity?.id) {
+      toast({
+        title: "Error",
+        description: "No hay una comunidad seleccionada",
+        variant: "destructive",
+      });
+      return;
+    }
     if (editingProvider) {
-      updateMutation.mutate({ id: editingProvider.id, data });
+      updateMutation.mutate({ id: editingProvider.id, data: { ...data, communityId: currentCommunity.id } });
     } else {
-      createMutation.mutate(data);
+      createMutation.mutate({ ...data, communityId: currentCommunity.id });
     }
   };
 
   const handleEdit = (provider: Provider) => {
     setEditingProvider(provider);
     form.reset({
+      communityId: provider.communityId,
       name: provider.name,
       category: provider.category,
       phone: provider.phone || "",
       email: provider.email || "",
       address: provider.address || "",
       rating: provider.rating ? parseFloat(provider.rating as string) : null,
-      tenantId: provider.tenantId,
       servicesCount: provider.servicesCount || 0,
     });
     setDialogOpen(true);

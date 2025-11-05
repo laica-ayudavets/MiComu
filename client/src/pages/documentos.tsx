@@ -51,7 +51,7 @@ import { insertDocumentSchema } from "@shared/schema";
 import { z } from "zod";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { useCommunities, useUser } from "@/hooks/use-auth";
+import { useCommunities, useUser, useCurrentCommunity } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 
 const formSchema = insertDocumentSchema.extend({
@@ -73,6 +73,7 @@ export default function Documentos() {
   const { toast } = useToast();
   const { data: user } = useUser();
   const { data: communities = [] } = useCommunities();
+  const { data: currentCommunity } = useCurrentCommunity();
 
   const { data: documents = [], isLoading } = useQuery<Document[]>({
     queryKey: ["/api/documents"],
@@ -81,11 +82,11 @@ export default function Documentos() {
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      communityId: currentCommunity?.id || "",
       title: "",
       description: "",
       type: "",
       fileUrl: "",
-      tenantId: "default-tenant",
       fileSize: null,
       uploadedBy: null,
       isAnalyzed: false,
@@ -184,21 +185,29 @@ export default function Documentos() {
   }, [documents, filter, searchTerm, communityFilter, dateFrom, dateTo]);
 
   const onSubmit = (data: FormValues) => {
+    if (!currentCommunity?.id) {
+      toast({
+        title: "Error",
+        description: "No hay una comunidad seleccionada",
+        variant: "destructive",
+      });
+      return;
+    }
     if (editingDocument) {
-      updateMutation.mutate({ id: editingDocument.id, data });
+      updateMutation.mutate({ id: editingDocument.id, data: { ...data, communityId: currentCommunity.id } });
     } else {
-      createMutation.mutate(data);
+      createMutation.mutate({ ...data, communityId: currentCommunity.id });
     }
   };
 
   const handleEdit = (document: Document) => {
     setEditingDocument(document);
     form.reset({
+      communityId: document.communityId,
       title: document.title,
       description: document.description || "",
       type: document.type,
       fileUrl: document.fileUrl,
-      tenantId: document.tenantId,
       fileSize: document.fileSize,
       uploadedBy: document.uploadedBy,
       isAnalyzed: document.isAnalyzed || false,
@@ -216,11 +225,11 @@ export default function Documentos() {
   const handleNewDocument = () => {
     setEditingDocument(null);
     form.reset({
+      communityId: currentCommunity?.id || "",
       title: "",
       description: "",
       type: "",
       fileUrl: "",
-      tenantId: "default-tenant",
       fileSize: null,
       uploadedBy: null,
       isAnalyzed: false,

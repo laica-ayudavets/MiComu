@@ -26,7 +26,11 @@ The system is built as a full-stack TypeScript application with a modern React f
 - ✅ Loading states and error handling throughout
 
 **Bug Fixes (November 5, 2025):**
-- 🐛 **Fixed Incident Creation**: Corrected form to use `communityId` instead of deprecated `tenantId`, ensuring incidents can be created properly
+- 🐛 **Fixed All Entity Creation**: Corrected ALL modules (Incidencias, Documentos, Acuerdos, Derramas, Proveedores) to use `communityId` instead of deprecated `tenantId`
+  - All entities now properly link to a specific community
+  - Added validation to ensure community is selected before creating entities
+  - Updated form defaultValues to use `useCurrentCommunity` hook
+  - Fixed both create and edit operations across all modules
 
 **Recent Updates (November 5, 2025):**
 - ✅ **Login Page**: Full authentication UI with email/password form, Zod validation, and automatic redirect
