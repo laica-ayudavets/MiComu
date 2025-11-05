@@ -25,8 +25,18 @@ The system is built as a full-stack TypeScript application with a modern React f
 - ✅ Toast notifications for user feedback
 - ✅ Loading states and error handling throughout
 
+**Recent Updates (November 5, 2025):**
+- ✅ **Login Page**: Full authentication UI with email/password form, Zod validation, and automatic redirect
+- ✅ **Protected Routes**: Automatic redirection to login for unauthenticated users
+- ✅ **Communities Sidebar for Admin_fincas**: 
+  - Left-side sidebar showing all communities
+  - Real-time search by community name
+  - Real-time search by address (includes city and postal code)
+  - Visual indication of active community
+  - Click to switch between communities
+  - Optimized queries with enabled flags based on user role
+
 **Pending Features:**
-- ⏳ Login/Registration page in frontend (currently only backend auth is implemented)
 - ⏳ Role-based UI feature guards (hide/show features based on user role)
 - ⏳ Property Companies and Communities CRUD UI (backend exists, UI pending)
 - ⏳ File upload to object storage for documents
