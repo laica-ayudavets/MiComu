@@ -36,13 +36,23 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Search, MoreVertical, Trash2, CheckCircle } from "lucide-react";
+import { Plus, Search, MoreVertical, Trash2, CheckCircle, CalendarIcon, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { Incident, InsertIncident } from "@shared/schema";
 import { insertIncidentSchema } from "@shared/schema";
 import { z } from "zod";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+import { useCommunities, useUser } from "@/hooks/use-auth";
+import { cn } from "@/lib/utils";
 
 const formSchema = insertIncidentSchema.extend({
   title: z.string().min(1, "El título es requerido"),
@@ -55,8 +65,14 @@ type FormValues = z.infer<typeof formSchema>;
 export default function Incidencias() {
   const [filter, setFilter] = useState("todas");
   const [searchTerm, setSearchTerm] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("todas");
+  const [communityFilter, setCommunityFilter] = useState("todas");
+  const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined);
+  const [dateTo, setDateTo] = useState<Date | undefined>(undefined);
   const [dialogOpen, setDialogOpen] = useState(false);
   const { toast } = useToast();
+  const { data: user } = useUser();
+  const { data: communities = [] } = useCommunities();
 
   const { data: incidents = [], isLoading } = useQuery<Incident[]>({
     queryKey: ["/api/incidents"],
@@ -152,9 +168,16 @@ export default function Incidencias() {
         searchTerm === "" ||
         incident.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         incident.category.toLowerCase().includes(searchTerm.toLowerCase());
-      return matchesFilter && matchesSearch;
+      const matchesCategory = categoryFilter === "todas" || incident.category === categoryFilter;
+      const matchesCommunity = communityFilter === "todas" || incident.communityId === communityFilter;
+      
+      const incidentDate = new Date(incident.createdAt);
+      const matchesDateFrom = !dateFrom || incidentDate >= dateFrom;
+      const matchesDateTo = !dateTo || incidentDate <= new Date(dateTo.setHours(23, 59, 59, 999));
+      
+      return matchesFilter && matchesSearch && matchesCategory && matchesCommunity && matchesDateFrom && matchesDateTo;
     });
-  }, [incidents, filter, searchTerm]);
+  }, [incidents, filter, searchTerm, categoryFilter, communityFilter, dateFrom, dateTo]);
 
   const onSubmit = (data: FormValues) => {
     createMutation.mutate(data);
@@ -349,28 +372,132 @@ export default function Incidencias() {
         </Dialog>
       </div>
 
-      <div className="flex gap-4 flex-wrap">
-        <div className="relative flex-1 min-w-[200px] max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar incidencias..."
-            className="pl-9"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            data-testid="input-search-incidents"
-          />
+      <div className="space-y-4">
+        <div className="flex gap-4 flex-wrap">
+          <div className="relative flex-1 min-w-[200px] max-w-md">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar incidencias..."
+              className="pl-9"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              data-testid="input-search-incidents"
+            />
+          </div>
+          <Select value={filter} onValueChange={setFilter}>
+            <SelectTrigger className="w-[180px]" data-testid="select-filter-status">
+              <SelectValue placeholder="Filtrar por estado" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todas">Todas</SelectItem>
+              <SelectItem value="pendiente">Pendientes</SelectItem>
+              <SelectItem value="en_curso">En Curso</SelectItem>
+              <SelectItem value="resuelto">Resueltas</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <SelectTrigger className="w-[180px]" data-testid="select-filter-category">
+              <SelectValue placeholder="Categoría" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todas">Todas las categorías</SelectItem>
+              {Array.from(new Set(incidents.map(i => i.category))).map((cat) => (
+                <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {user?.role === "admin_fincas" && (
+            <Select value={communityFilter} onValueChange={setCommunityFilter}>
+              <SelectTrigger className="w-[200px]" data-testid="select-filter-community">
+                <SelectValue placeholder="Comunidad" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todas">Todas las comunidades</SelectItem>
+                {communities.map((comm) => (
+                  <SelectItem key={comm.id} value={comm.id}>{comm.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
-        <Select value={filter} onValueChange={setFilter}>
-          <SelectTrigger className="w-[180px]" data-testid="select-filter-status">
-            <SelectValue placeholder="Filtrar por estado" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todas">Todas</SelectItem>
-            <SelectItem value="pendiente">Pendientes</SelectItem>
-            <SelectItem value="en_curso">En Curso</SelectItem>
-            <SelectItem value="resuelto">Resueltas</SelectItem>
-          </SelectContent>
-        </Select>
+        
+        <div className="flex gap-4 flex-wrap items-center">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Desde:</span>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-[180px] justify-start text-left font-normal",
+                    !dateFrom && "text-muted-foreground"
+                  )}
+                  data-testid="button-filter-date-from"
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {dateFrom ? format(dateFrom, "PP", { locale: es }) : "Seleccionar"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={dateFrom}
+                  onSelect={setDateFrom}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+            {dateFrom && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setDateFrom(undefined)}
+                data-testid="button-clear-date-from"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Hasta:</span>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-[180px] justify-start text-left font-normal",
+                    !dateTo && "text-muted-foreground"
+                  )}
+                  data-testid="button-filter-date-to"
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {dateTo ? format(dateTo, "PP", { locale: es }) : "Seleccionar"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={dateTo}
+                  onSelect={setDateTo}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+            {dateTo && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setDateTo(undefined)}
+                data-testid="button-clear-date-to"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        </div>
       </div>
 
       {isLoading ? (
