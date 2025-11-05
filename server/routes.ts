@@ -1,6 +1,15 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
+import passport from "passport";
 import { storage } from "./storage";
+import { 
+  hashPassword,
+  getUserContext,
+  getCommunityIdFromUser,
+  setSelectedCommunity,
+  requireAuth,
+  requireRole
+} from "./auth";
 import { 
   insertIncidentSchema,
   updateIncidentSchema,
@@ -16,7 +25,8 @@ import {
   updateProviderSchema,
   insertPropertyCompanySchema,
   insertCommunitySchema,
-  insertUserSchema
+  insertUserSchema,
+  type User
 } from "@shared/schema";
 import { z } from "zod";
 
@@ -71,15 +81,186 @@ export async function registerRoutes(app: Express): Promise<Server> {
   DEFAULT_PROPERTY_COMPANY_ID = propertyCompany!.id;
   DEFAULT_COMMUNITY_ID = community!.id;
 
-  // Helper function to get communityId
-  // In a real implementation, this would check user role and permissions
-  // For now, we default to the demo community
+  // Helper function to get communityId based on user role
   const getCommunityId = (req: Request) => {
-    return (req.user as any)?.communityId || DEFAULT_COMMUNITY_ID;
+    return getCommunityIdFromUser(req, DEFAULT_COMMUNITY_ID);
   };
 
+  // ===== Authentication Endpoints =====
+  
+  // Register new user (only admin_fincas can register other users)
+  app.post("/api/auth/register", requireRole("admin_fincas"), async (req: Request, res: Response) => {
+    try {
+      const currentUser = req.user as User;
+      const { email, password, username, fullName, role, communityId, unitNumber } = req.body;
+
+      // Validate required fields
+      if (!email || !password || !username) {
+        return res.status(400).json({ error: "Email, username, and password are required" });
+      }
+
+      // Check if user already exists
+      const existingUser = await storage.getUserByEmail(email.toLowerCase());
+      if (existingUser) {
+        return res.status(400).json({ error: "Email already registered" });
+      }
+
+      // Validate role assignment
+      const requestedRole = role || "vecino";
+      if (requestedRole === "admin_fincas" && currentUser.role !== "admin_fincas") {
+        return res.status(403).json({ error: "Only admin_fincas can create other admin_fincas users" });
+      }
+
+      // Validate community assignment for presidente and vecino
+      if ((requestedRole === "presidente" || requestedRole === "vecino") && !communityId) {
+        return res.status(400).json({ error: "Community ID is required for presidente and vecino roles" });
+      }
+
+      // Verify community belongs to admin's property company
+      if (communityId) {
+        const community = await storage.getCommunity(communityId);
+        if (!community || community.propertyCompanyId !== currentUser.propertyCompanyId) {
+          return res.status(404).json({ error: "Community not found or not accessible" });
+        }
+      }
+
+      // Hash password
+      const passwordHash = await hashPassword(password);
+
+      // Create user
+      const userData = insertUserSchema.parse({
+        email: email.toLowerCase(),
+        username,
+        password: passwordHash,
+        fullName: fullName || null,
+        role: requestedRole,
+        communityId: communityId || null,
+        propertyCompanyId: requestedRole === "admin_fincas" ? currentUser.propertyCompanyId : null,
+        unitNumber: unitNumber || null,
+      });
+
+      const user = await storage.createUser(userData);
+
+      // Remove password from response
+      const { password: _, ...userWithoutPassword } = user;
+      
+      res.status(201).json(userWithoutPassword);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation error", details: error.errors });
+      }
+      console.error("Error registering user:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Login
+  app.post("/api/auth/login", (req: Request, res: Response, next) => {
+    passport.authenticate("local", (err: any, user: User | false, info: any) => {
+      if (err) {
+        return res.status(500).json({ error: "Internal server error" });
+      }
+      if (!user) {
+        return res.status(401).json({ error: info?.message || "Invalid credentials" });
+      }
+
+      req.logIn(user, (err) => {
+        if (err) {
+          return res.status(500).json({ error: "Internal server error" });
+        }
+
+        // Remove password from response
+        const { password: _, ...userWithoutPassword } = user;
+        res.json(userWithoutPassword);
+      });
+    })(req, res, next);
+  });
+
+  // Logout
+  app.post("/api/auth/logout", (req: Request, res: Response) => {
+    req.logout((err) => {
+      if (err) {
+        return res.status(500).json({ error: "Internal server error" });
+      }
+      res.json({ message: "Logged out successfully" });
+    });
+  });
+
+  // Get current user
+  app.get("/api/auth/me", (req: Request, res: Response) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+
+    const user = req.user as User;
+    const { password: _, ...userWithoutPassword } = user;
+    
+    // Include selected community for admin_fincas
+    const selectedCommunityId = (req.session as any)?.selectedCommunityId;
+    
+    res.json({
+      ...userWithoutPassword,
+      selectedCommunityId: selectedCommunityId || null,
+    });
+  });
+
+  // Select community (for admin_fincas users)
+  app.post("/api/auth/select-community", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = req.user as User;
+      const { communityId } = req.body;
+
+      if (!communityId) {
+        return res.status(400).json({ error: "communityId is required" });
+      }
+
+      // Only admin_fincas can select different communities
+      if (user.role !== "admin_fincas") {
+        return res.status(403).json({ error: "Only admin_fincas users can select communities" });
+      }
+
+      // Verify community belongs to the user's property company
+      const community = await storage.getCommunity(communityId);
+      if (!community || community.propertyCompanyId !== user.propertyCompanyId) {
+        return res.status(404).json({ error: "Community not found or not accessible" });
+      }
+
+      // Set selected community in session
+      setSelectedCommunity(req, communityId);
+
+      res.json({ message: "Community selected", communityId });
+    } catch (error) {
+      console.error("Error selecting community:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Get communities for current user (admin_fincas gets all their communities)
+  app.get("/api/auth/communities", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = req.user as User;
+
+      if (user.role === "admin_fincas" && user.propertyCompanyId) {
+        // Admin gets all communities from their property company
+        const communities = await storage.getCommunities(user.propertyCompanyId);
+        res.json(communities);
+      } else if (user.communityId) {
+        // Presidente and vecino only see their community
+        const community = await storage.getCommunity(user.communityId);
+        res.json(community ? [community] : []);
+      } else {
+        res.json([]);
+      }
+    } catch (error) {
+      console.error("Error fetching communities:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // ===== Protected Business Endpoints =====
+
   // Dashboard stats endpoint
-  app.get("/api/dashboard/stats", async (req: Request, res: Response) => {
+  app.get("/api/dashboard/stats", requireAuth, async (req: Request, res: Response) => {
     try {
       const communityId = getCommunityId(req);
       const stats = await storage.getDashboardStats(communityId);
@@ -91,7 +272,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Incidents endpoints
-  app.get("/api/incidents", async (req: Request, res: Response) => {
+  app.get("/api/incidents", requireAuth, async (req: Request, res: Response) => {
     try {
       const communityId = getCommunityId(req);
       const incidents = await storage.getIncidents(communityId);
@@ -102,7 +283,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/incidents/:id", async (req: Request, res: Response) => {
+  app.get("/api/incidents/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const communityId = getCommunityId(req);
       const incident = await storage.getIncident(req.params.id, communityId);
@@ -116,7 +297,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/incidents", async (req: Request, res: Response) => {
+  app.post("/api/incidents", requireAuth, async (req: Request, res: Response) => {
     try {
       const communityId = getCommunityId(req);
       const data = insertIncidentSchema.parse({ ...req.body, communityId });
@@ -131,7 +312,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/incidents/:id", async (req: Request, res: Response) => {
+  app.patch("/api/incidents/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const communityId = getCommunityId(req);
       const data = updateIncidentSchema.parse(req.body);
@@ -149,7 +330,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/incidents/:id", async (req: Request, res: Response) => {
+  app.delete("/api/incidents/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const communityId = getCommunityId(req);
       const deleted = await storage.deleteIncident(req.params.id, communityId);
@@ -164,7 +345,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Documents endpoints
-  app.get("/api/documents", async (req: Request, res: Response) => {
+  app.get("/api/documents", requireAuth, async (req: Request, res: Response) => {
     try {
       const communityId = getCommunityId(req);
       const documents = await storage.getDocuments(communityId);
@@ -175,7 +356,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/documents/:id", async (req: Request, res: Response) => {
+  app.get("/api/documents/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const communityId = getCommunityId(req);
       const document = await storage.getDocument(req.params.id, communityId);
@@ -189,7 +370,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/documents", async (req: Request, res: Response) => {
+  app.post("/api/documents", requireAuth, async (req: Request, res: Response) => {
     try {
       const communityId = getCommunityId(req);
       const data = insertDocumentSchema.parse({ ...req.body, communityId });
@@ -204,7 +385,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/documents/:id", async (req: Request, res: Response) => {
+  app.patch("/api/documents/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const communityId = getCommunityId(req);
       const data = updateDocumentSchema.parse(req.body);
@@ -222,7 +403,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/documents/:id", async (req: Request, res: Response) => {
+  app.delete("/api/documents/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const communityId = getCommunityId(req);
       const deleted = await storage.deleteDocument(req.params.id, communityId);
@@ -237,7 +418,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Agreements endpoints
-  app.get("/api/agreements", async (req: Request, res: Response) => {
+  app.get("/api/agreements", requireAuth, async (req: Request, res: Response) => {
     try {
       const communityId = getCommunityId(req);
       const agreements = await storage.getAgreements(communityId);
@@ -248,7 +429,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/agreements", async (req: Request, res: Response) => {
+  app.post("/api/agreements", requireAuth, async (req: Request, res: Response) => {
     try {
       const communityId = getCommunityId(req);
       const data = insertAgreementSchema.parse({ ...req.body, communityId });
@@ -263,7 +444,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/agreements/:id", async (req: Request, res: Response) => {
+  app.patch("/api/agreements/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const communityId = getCommunityId(req);
       const data = updateAgreementSchema.parse(req.body);
@@ -281,7 +462,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/agreements/:id", async (req: Request, res: Response) => {
+  app.delete("/api/agreements/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const communityId = getCommunityId(req);
       const deleted = await storage.deleteAgreement(req.params.id, communityId);
@@ -296,7 +477,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Derramas endpoints
-  app.get("/api/derramas", async (req: Request, res: Response) => {
+  app.get("/api/derramas", requireAuth, async (req: Request, res: Response) => {
     try {
       const communityId = getCommunityId(req);
       const derramas = await storage.getDerramas(communityId);
@@ -307,7 +488,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/derramas/:id", async (req: Request, res: Response) => {
+  app.get("/api/derramas/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const communityId = getCommunityId(req);
       const derrama = await storage.getDerrama(req.params.id, communityId);
@@ -321,7 +502,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/derramas", async (req: Request, res: Response) => {
+  app.post("/api/derramas", requireAuth, async (req: Request, res: Response) => {
     try {
       const communityId = getCommunityId(req);
       const data = insertDerramaSchema.parse({ ...req.body, communityId });
@@ -336,7 +517,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/derramas/:id", async (req: Request, res: Response) => {
+  app.patch("/api/derramas/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const communityId = getCommunityId(req);
       const data = updateDerramaSchema.parse(req.body);
@@ -354,7 +535,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/derramas/:id", async (req: Request, res: Response) => {
+  app.delete("/api/derramas/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const communityId = getCommunityId(req);
       const deleted = await storage.deleteDerrama(req.params.id, communityId);
@@ -369,7 +550,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Derrama Payments endpoints
-  app.get("/api/derramas/:derramaId/payments", async (req: Request, res: Response) => {
+  app.get("/api/derramas/:derramaId/payments", requireAuth, async (req: Request, res: Response) => {
     try {
       const payments = await storage.getDerramaPayments(req.params.derramaId);
       res.json(payments);
@@ -379,7 +560,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/derramas/:derramaId/payments", async (req: Request, res: Response) => {
+  app.post("/api/derramas/:derramaId/payments", requireAuth, async (req: Request, res: Response) => {
     try {
       const data = insertDerramaPaymentSchema.parse({ 
         ...req.body, 
@@ -396,7 +577,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/derrama-payments/:id", async (req: Request, res: Response) => {
+  app.patch("/api/derrama-payments/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const communityId = getCommunityId(req);
       const data = updateDerramaPaymentSchema.parse(req.body);
@@ -415,7 +596,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Providers endpoints
-  app.get("/api/providers", async (req: Request, res: Response) => {
+  app.get("/api/providers", requireAuth, async (req: Request, res: Response) => {
     try {
       const communityId = getCommunityId(req);
       const providers = await storage.getProviders(communityId);
@@ -426,7 +607,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/providers/:id", async (req: Request, res: Response) => {
+  app.get("/api/providers/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const communityId = getCommunityId(req);
       const provider = await storage.getProvider(req.params.id, communityId);
@@ -440,7 +621,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/providers", async (req: Request, res: Response) => {
+  app.post("/api/providers", requireAuth, async (req: Request, res: Response) => {
     try {
       const communityId = getCommunityId(req);
       const data = insertProviderSchema.parse({ ...req.body, communityId });
@@ -455,7 +636,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/providers/:id", async (req: Request, res: Response) => {
+  app.patch("/api/providers/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const communityId = getCommunityId(req);
       const data = updateProviderSchema.parse(req.body);
@@ -473,7 +654,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/providers/:id", async (req: Request, res: Response) => {
+  app.delete("/api/providers/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const communityId = getCommunityId(req);
       const deleted = await storage.deleteProvider(req.params.id, communityId);
