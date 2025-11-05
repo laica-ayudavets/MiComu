@@ -17,11 +17,8 @@ export default function Comunidades() {
   const { toast } = useToast();
 
   const selectCommunityMutation = useMutation({
-    mutationFn: async (communityId: number) => {
-      return apiRequest("/api/auth/select-community", {
-        method: "POST",
-        body: JSON.stringify({ communityId }),
-      });
+    mutationFn: async (communityId: string) => {
+      return apiRequest("POST", "/api/auth/select-community", { communityId });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/auth/current-community"] });
@@ -37,7 +34,7 @@ export default function Comunidades() {
     const matchesAddress =
       community.address.toLowerCase().includes(searchAddress.toLowerCase()) ||
       community.city.toLowerCase().includes(searchAddress.toLowerCase()) ||
-      community.postalCode.toLowerCase().includes(searchAddress.toLowerCase());
+      (community.postalCode?.toLowerCase() || "").includes(searchAddress.toLowerCase());
     return matchesName && matchesAddress;
   });
 
@@ -148,7 +145,7 @@ export default function Comunidades() {
                       <div>
                         <p className="text-foreground">{community.address}</p>
                         <p className="text-muted-foreground">
-                          {community.city}, {community.postalCode}
+                          {community.city}{community.postalCode ? `, ${community.postalCode}` : ""}
                         </p>
                       </div>
                     </div>

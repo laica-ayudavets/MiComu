@@ -5,7 +5,6 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
-import { CommunitiesSidebar } from "@/components/communities-sidebar";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { CommunitySelector } from "@/components/community-selector";
@@ -14,6 +13,7 @@ import NotFound from "@/pages/not-found";
 import Landing from "@/pages/landing";
 import Login from "@/pages/login";
 import Dashboard from "@/pages/dashboard";
+import Comunidades from "@/pages/comunidades";
 import Incidencias from "@/pages/incidencias";
 import Documentos from "@/pages/documentos";
 import Acuerdos from "@/pages/acuerdos";
@@ -37,8 +37,6 @@ function AppLayout({ children }: { children: React.ReactNode }) {
     return <Redirect to="/login" />;
   }
 
-  const isAdminFincas = user.role === "admin_fincas";
-
   const style = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",
@@ -47,13 +45,12 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <SidebarProvider style={style as React.CSSProperties}>
       <div className="flex h-screen w-full">
-        {isAdminFincas && <CommunitiesSidebar />}
         <AppSidebar />
         <div className="flex flex-col flex-1 overflow-hidden">
           <header className="flex items-center justify-between p-3 border-b gap-4">
             <div className="flex items-center gap-2">
               <SidebarTrigger data-testid="button-sidebar-toggle" />
-              {!isAdminFincas && <CommunitySelector />}
+              <CommunitySelector />
             </div>
             <ThemeToggle />
           </header>
@@ -72,6 +69,11 @@ function Router() {
       <Route path="/">
         <AppLayout>
           <Dashboard />
+        </AppLayout>
+      </Route>
+      <Route path="/comunidades">
+        <AppLayout>
+          <Comunidades />
         </AppLayout>
       </Route>
       <Route path="/incidencias">
