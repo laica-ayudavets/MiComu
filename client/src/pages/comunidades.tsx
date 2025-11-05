@@ -1,20 +1,27 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
+import { Redirect } from "wouter";
 import { Building2, MapPin, Search, Users } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useCommunities, useCurrentCommunity } from "@/hooks/use-auth";
+import { useCommunities, useCurrentCommunity, useUser } from "@/hooks/use-auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Comunidades() {
-  const { data: communities = [], isLoading } = useCommunities();
+  const { data: user, isLoading: userLoading } = useUser();
+  const { data: communities = [], isLoading: communitiesLoading } = useCommunities();
   const { data: currentCommunity } = useCurrentCommunity();
   const [searchName, setSearchName] = useState("");
   const [searchAddress, setSearchAddress] = useState("");
   const { toast } = useToast();
+
+  // Redirect non-admin users
+  if (!userLoading && user?.role !== "admin_fincas") {
+    return <Redirect to="/" />;
+  }
 
   const selectCommunityMutation = useMutation({
     mutationFn: async (communityId: string) => {
@@ -38,7 +45,7 @@ export default function Comunidades() {
     return matchesName && matchesAddress;
   });
 
-  if (isLoading) {
+  if (userLoading || communitiesLoading) {
     return (
       <div className="p-6">
         <div className="flex items-center justify-center min-h-[400px]">

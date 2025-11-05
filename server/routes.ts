@@ -205,7 +205,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Select community (for admin_fincas users)
-  app.post("/api/auth/select-community", requireAuth, async (req: Request, res: Response) => {
+  app.post("/api/auth/select-community", requireRole("admin_fincas"), async (req: Request, res: Response) => {
     try {
       const user = req.user as User;
       const { communityId } = req.body;
@@ -243,7 +243,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get communities for current user (admin_fincas gets all their communities)
-  app.get("/api/auth/communities", requireAuth, async (req: Request, res: Response) => {
+  app.get("/api/auth/communities", requireRole("admin_fincas"), async (req: Request, res: Response) => {
     try {
       const user = req.user as User;
 
