@@ -21,7 +21,7 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar";
 import { Link, useLocation } from "wouter";
-import { useCurrentCommunity } from "@/hooks/use-auth";
+import { useCurrentCommunity, useUser } from "@/hooks/use-auth";
 
 const menuItems = [
   {
@@ -56,9 +56,20 @@ const menuItems = [
   },
 ];
 
+const adminMenuItems = [
+  {
+    title: "Comunidades",
+    url: "/comunidades",
+    icon: Building2,
+  },
+];
+
 export function AppSidebar() {
   const [location] = useLocation();
   const { data: currentCommunity } = useCurrentCommunity();
+  const { data: user } = useUser();
+  
+  const isAdminFincas = user?.role === "admin_fincas";
 
   return (
     <Sidebar>
@@ -80,7 +91,25 @@ export function AppSidebar() {
           <SidebarGroupLabel>Menú Principal</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {menuItems.map((item) => (
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location === "/"}>
+                  <Link href="/" data-testid="link-dashboard">
+                    <LayoutDashboard className="w-4 h-4" />
+                    <span>Dashboard</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              {isAdminFincas && adminMenuItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild isActive={location === item.url}>
+                    <Link href={item.url} data-testid={`link-${item.title.toLowerCase()}`}>
+                      <item.icon className="w-4 h-4" />
+                      <span>{item.title}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+              {menuItems.slice(1).map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild isActive={location === item.url}>
                     <Link href={item.url} data-testid={`link-${item.title.toLowerCase()}`}>
