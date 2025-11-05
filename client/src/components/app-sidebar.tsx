@@ -21,6 +21,7 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar";
 import { Link, useLocation } from "wouter";
+import { useCurrentCommunity } from "@/hooks/use-auth";
 
 const menuItems = [
   {
@@ -57,6 +58,7 @@ const menuItems = [
 
 export function AppSidebar() {
   const [location] = useLocation();
+  const { data: currentCommunity } = useCurrentCommunity();
 
   return (
     <Sidebar>
@@ -67,7 +69,9 @@ export function AppSidebar() {
           </div>
           <div>
             <h2 className="text-sm font-semibold">Administra Mi Comunidad</h2>
-            <p className="text-xs text-muted-foreground">Los Pinos</p>
+            <p className="text-xs text-muted-foreground" data-testid="text-community-name">
+              {currentCommunity?.name || "Cargando..."}
+            </p>
           </div>
         </div>
       </SidebarHeader>

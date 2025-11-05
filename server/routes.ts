@@ -228,7 +228,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Set selected community in session
       setSelectedCommunity(req, communityId);
 
-      res.json({ message: "Community selected", communityId });
+      // Explicitly save the session before responding
+      req.session.save((err) => {
+        if (err) {
+          console.error("Error saving session:", err);
+          return res.status(500).json({ error: "Failed to save session" });
+        }
+        res.json({ message: "Community selected", communityId });
+      });
     } catch (error) {
       console.error("Error selecting community:", error);
       res.status(500).json({ error: "Internal server error" });
@@ -253,6 +260,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     } catch (error) {
       console.error("Error fetching communities:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Get current selected community
+  app.get("/api/auth/current-community", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = req.user as User;
+      const communityId = getCommunityIdFromUser(req, DEFAULT_COMMUNITY_ID);
+      
+      if (!communityId) {
+        return res.json(null);
+      }
+
+      const community = await storage.getCommunity(communityId);
+      res.json(community);
+    } catch (error) {
+      console.error("Error fetching current community:", error);
       res.status(500).json({ error: "Internal server error" });
     }
   });
