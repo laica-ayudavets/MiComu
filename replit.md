@@ -25,6 +25,9 @@ The system is built as a full-stack TypeScript application with a modern React f
 - ✅ Toast notifications for user feedback
 - ✅ Loading states and error handling throughout
 
+**Bug Fixes (November 5, 2025):**
+- 🐛 **Fixed Incident Creation**: Corrected form to use `communityId` instead of deprecated `tenantId`, ensuring incidents can be created properly
+
 **Recent Updates (November 5, 2025):**
 - ✅ **Login Page**: Full authentication UI with email/password form, Zod validation, and automatic redirect
 - ✅ **Protected Routes**: Automatic redirection to login for unauthenticated users

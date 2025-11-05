@@ -51,7 +51,7 @@ import { insertIncidentSchema } from "@shared/schema";
 import { z } from "zod";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { useCommunities, useUser } from "@/hooks/use-auth";
+import { useCommunities, useUser, useCurrentCommunity } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 
 const formSchema = insertIncidentSchema.extend({
@@ -73,6 +73,7 @@ export default function Incidencias() {
   const { toast } = useToast();
   const { data: user } = useUser();
   const { data: communities = [] } = useCommunities();
+  const { data: currentCommunity } = useCurrentCommunity();
 
   const { data: incidents = [], isLoading } = useQuery<Incident[]>({
     queryKey: ["/api/incidents"],
@@ -81,13 +82,13 @@ export default function Incidencias() {
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      communityId: currentCommunity?.id || "",
       title: "",
       description: "",
       category: "",
       location: "",
       priority: "media",
       status: "pendiente",
-      tenantId: "default-tenant",
       reportedBy: null,
       assignedTo: null,
       resolvedAt: null,
@@ -182,7 +183,18 @@ export default function Incidencias() {
   }, [incidents, filter, searchTerm, categoryFilter, communityFilter, dateFrom, dateTo]);
 
   const onSubmit = (data: FormValues) => {
-    createMutation.mutate(data);
+    if (!currentCommunity?.id) {
+      toast({
+        title: "Error",
+        description: "No hay una comunidad seleccionada",
+        variant: "destructive",
+      });
+      return;
+    }
+    createMutation.mutate({
+      ...data,
+      communityId: currentCommunity.id,
+    });
   };
 
   const handleStatusUpdate = (id: string, status: string) => {
