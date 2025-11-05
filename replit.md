@@ -28,12 +28,15 @@ The system is built as a full-stack TypeScript application with a modern React f
 **Recent Updates (November 5, 2025):**
 - ✅ **Login Page**: Full authentication UI with email/password form, Zod validation, and automatic redirect
 - ✅ **Protected Routes**: Automatic redirection to login for unauthenticated users
-- ✅ **Communities Sidebar for Admin_fincas**: 
-  - Left-side sidebar showing all communities
+- ✅ **Comunidades Menu Item for Admin_fincas**: 
+  - "Comunidades" menu item in sidebar (below Dashboard) visible only for admin_fincas
+  - Full page at /comunidades showing all communities
   - Real-time search by community name
   - Real-time search by address (includes city and postal code)
-  - Visual indication of active community
-  - Click to switch between communities
+  - Visual indication of active community with "Activa" badge
+  - Click to select/switch between communities
+  - Role-based authorization: Backend endpoints protected with requireRole("admin_fincas")
+  - Client-side route protection: Non-admin users redirected to dashboard
   - Optimized queries with enabled flags based on user role
 
 **Pending Features:**
