@@ -224,3 +224,57 @@ export const updateProviderSchema = insertProviderSchema.partial().omit({
 export type InsertProvider = z.infer<typeof insertProviderSchema>;
 export type UpdateProvider = z.infer<typeof updateProviderSchema>;
 export type Provider = typeof providers.$inferSelect;
+
+// Quota system enums
+export const quotaFrequencyEnum = pgEnum("quota_frequency", ["mensual", "trimestral", "semestral", "anual", "unica"]);
+export const quotaPaymentStatusEnum = pgEnum("quota_payment_status", ["pendiente", "pagada", "deudor"]);
+
+// Quota Types - Define types of quotas for a community (up to 10)
+export const quotaTypes = pgTable("quota_types", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  communityId: varchar("community_id").notNull().references(() => communities.id, { onDelete: "cascade" }),
+  name: text("name").notNull(), // e.g., "Cuota ordinaria", "Cuota extraordinaria", "Gastos agua"
+  description: text("description"),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  frequency: quotaFrequencyEnum("frequency").notNull().default("mensual"),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertQuotaTypeSchema = createInsertSchema(quotaTypes).omit({
+  id: true,
+  createdAt: true,
+});
+export const updateQuotaTypeSchema = insertQuotaTypeSchema.partial().omit({
+  communityId: true,
+});
+export type InsertQuotaType = z.infer<typeof insertQuotaTypeSchema>;
+export type UpdateQuotaType = z.infer<typeof updateQuotaTypeSchema>;
+export type QuotaType = typeof quotaTypes.$inferSelect;
+
+// Quota Assignments - Assign quotas to specific residents with payment tracking
+export const quotaAssignments = pgTable("quota_assignments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  communityId: varchar("community_id").notNull().references(() => communities.id, { onDelete: "cascade" }),
+  quotaTypeId: varchar("quota_type_id").notNull().references(() => quotaTypes.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }), // Vecino
+  status: quotaPaymentStatusEnum("status").notNull().default("pendiente"),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(), // Can differ from quota type if adjusted
+  dueDate: timestamp("due_date").notNull(),
+  paidDate: timestamp("paid_date"),
+  notes: text("notes"), // Optional notes (e.g., payment method, discount reason)
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertQuotaAssignmentSchema = createInsertSchema(quotaAssignments).omit({
+  id: true,
+  createdAt: true,
+});
+export const updateQuotaAssignmentSchema = insertQuotaAssignmentSchema.partial().omit({
+  communityId: true,
+  quotaTypeId: true,
+  userId: true,
+});
+export type InsertQuotaAssignment = z.infer<typeof insertQuotaAssignmentSchema>;
+export type UpdateQuotaAssignment = z.infer<typeof updateQuotaAssignmentSchema>;
+export type QuotaAssignment = typeof quotaAssignments.$inferSelect;
