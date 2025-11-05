@@ -840,7 +840,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/quota-assignments", requireAuth, async (req: Request, res: Response) => {
     try {
       const communityId = getCommunityId(req);
-      const data = insertQuotaAssignmentSchema.parse({ ...req.body, communityId });
+      
+      // Transform frontend data to match backend schema expectations
+      const transformedData = {
+        ...req.body,
+        communityId,
+        // Convert number amount to string for decimal field
+        amount: req.body.amount !== undefined ? String(req.body.amount) : undefined,
+        // Convert ISO date string to Date object
+        dueDate: req.body.dueDate ? new Date(req.body.dueDate) : undefined,
+        paidDate: req.body.paidDate ? new Date(req.body.paidDate) : undefined,
+      };
+      
+      const data = insertQuotaAssignmentSchema.parse(transformedData);
       const assignment = await storage.createQuotaAssignment(data);
       res.status(201).json(assignment);
     } catch (error) {
@@ -855,7 +867,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/quota-assignments/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const communityId = getCommunityId(req);
-      const data = updateQuotaAssignmentSchema.parse(req.body);
+      
+      // Transform frontend data to match backend schema expectations
+      const transformedData = {
+        ...req.body,
+        // Convert number amount to string for decimal field
+        amount: req.body.amount !== undefined ? String(req.body.amount) : undefined,
+        // Convert ISO date strings to Date objects
+        dueDate: req.body.dueDate ? new Date(req.body.dueDate) : undefined,
+        paidDate: req.body.paidDate ? new Date(req.body.paidDate) : undefined,
+      };
+      
+      const data = updateQuotaAssignmentSchema.parse(transformedData);
       const assignment = await storage.updateQuotaAssignment(req.params.id, communityId, data);
       if (!assignment) {
         return res.status(404).json({ error: "Quota assignment not found" });
