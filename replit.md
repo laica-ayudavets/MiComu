@@ -13,13 +13,21 @@ The system is built as a full-stack TypeScript application with a modern React f
   - Users (Vecinos/Presidentes/Admin Fincas) - Bottom level
 - ✅ Complete PostgreSQL database schema with property_companies and communities tables
 - ✅ Updated role system: admin_fincas, presidente, vecino
-- ✅ Full CRUD REST API for all entities (incidents, documents, agreements, derramas, providers)
+- ✅ Full CRUD REST API for all entities (incidents, documents, agreements, derramas, providers, quotas)
 - ✅ Community-scoped data isolation (all data belongs to a community)
-- ✅ All 6 main pages connected to backend API with TanStack Query
+- ✅ All 7 main pages connected to backend API with TanStack Query
 - ✅ **Complete Security Hardening**: All business endpoints protected with requireAuth middleware
 - ✅ **Role-Based Access Control**: Admin_fincas can switch between communities, presidente/vecino limited to their assigned community
 - ✅ **Community Selector Component**: Fully functional selector in header for admin_fincas with session persistence
 - ✅ **Dynamic Community Display**: Sidebar and UI components show current community name dynamically
+- ✅ **Quotas Management System**: Complete module for tracking resident fees and payment status
+  - Quota types definition with name, amount, frequency (monthly/quarterly/annual/one-time)
+  - Quota assignments to individual residents with independent amounts and due dates
+  - Payment status tracking (pending/paid/overdue)
+  - Dual-tab interface for managing quota types and assignments
+  - Full CRUD operations with validation and error handling
+  - Backend data transformation to handle frontend/database type mismatches
+  - E2E tested and verified working
 - ✅ Professional UI with purple/orange glassmorphism design
 - ✅ Form validation with Zod and react-hook-form
 - ✅ Toast notifications for user feedback
@@ -55,6 +63,15 @@ The system is built as a full-stack TypeScript application with a modern React f
   - Non-mutating date filtering to prevent state corruption
   - Community filter visible only for admin_fincas role
   - All filters work together with AND logic for precise data filtering
+- ✅ **Quotas Module** (November 5, 2025): Complete implementation for tracking resident fees and debtors
+  - Database schema with quota_types and quota_assignments tables
+  - Quota types: customizable fees with name, description, amount, and frequency
+  - Quota assignments: link residents to quotas with due dates, amounts, and payment status
+  - Two-tab interface: manage quota types and view/create assignments
+  - /api/users endpoint for listing residents in current community
+  - Backend type transformation for decimal amounts and date handling
+  - Full E2E testing completed and verified working
+  - Assignment amounts are independent from quota type amounts (can be adjusted per resident)
 
 **Pending Features:**
 - ⏳ Role-based UI feature guards (hide/show features based on user role)
@@ -122,11 +139,13 @@ Preferred communication style: Simple, everyday language.
 **ORM**: Drizzle ORM with type-safe schema definitions
 
 **Schema Design**:
-- Tenant table as root entity with branding configuration
-- User authentication linked to tenants
-- Domain entities: incidents, documents, agreements, derramas, providers
-- Enum types for status fields (incident_status, agreement_status, priority levels)
-- UUID primary keys with cascade deletion on tenant removal
+- Property companies as top-level entities managing multiple communities
+- Communities table with address, city, postal code
+- User authentication linked to communities (or property companies for admin_fincas)
+- Domain entities: incidents, documents, agreements, derramas, providers, quota_types, quota_assignments
+- Enum types for status fields (incident_status, agreement_status, priority levels, quota_payment_status, frequency)
+- UUID primary keys (varchar) with cascade deletion on community removal
+- All domain entities scoped to communityId for multi-tenant isolation
 - Timestamps for audit trail
 
 **Validation**: Drizzle-Zod integration for runtime schema validation matching database schema
