@@ -38,6 +38,16 @@ The system is built as a full-stack TypeScript application with a modern React f
   - Role-based authorization: Backend endpoints protected with requireRole("admin_fincas")
   - Client-side route protection: Non-admin users redirected to dashboard
   - Optimized queries with enabled flags based on user role
+- ✅ **Comprehensive Filtering System**: Advanced filtering across all core modules
+  - **Incidencias** (Incidents): Date range (desde/hasta), community (admin_fincas only), category, status
+  - **Documentos** (Documents): Date range, community (admin_fincas only), document type
+  - **Derramas** (Assessments): Date range, community (admin_fincas only)
+  - **Acuerdos** (Agreements): Date range, community (admin_fincas only), status
+  - Calendar component for intuitive date selection with Spanish locale
+  - Clear buttons (X icon) for easy filter reset
+  - Non-mutating date filtering to prevent state corruption
+  - Community filter visible only for admin_fincas role
+  - All filters work together with AND logic for precise data filtering
 
 **Pending Features:**
 - ⏳ Role-based UI feature guards (hide/show features based on user role)
