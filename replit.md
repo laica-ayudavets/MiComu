@@ -16,15 +16,19 @@ The system is built as a full-stack TypeScript application with a modern React f
 - ✅ Full CRUD REST API for all entities (incidents, documents, agreements, derramas, providers)
 - ✅ Community-scoped data isolation (all data belongs to a community)
 - ✅ All 6 main pages connected to backend API with TanStack Query
-- ✅ Security hardening: All PATCH endpoints validated with community isolation
+- ✅ **Complete Security Hardening**: All business endpoints protected with requireAuth middleware
+- ✅ **Role-Based Access Control**: Admin_fincas can switch between communities, presidente/vecino limited to their assigned community
+- ✅ **Community Selector Component**: Fully functional selector in header for admin_fincas with session persistence
+- ✅ **Dynamic Community Display**: Sidebar and UI components show current community name dynamically
 - ✅ Professional UI with purple/orange glassmorphism design
 - ✅ Form validation with Zod and react-hook-form
 - ✅ Toast notifications for user feedback
 - ✅ Loading states and error handling throughout
 
 **Pending Features:**
-- ⏳ Role-based access control (admin_fincas can switch communities, presidente/vecino limited to their community)
-- ⏳ Community selector in frontend for admin_fincas users
+- ⏳ Login/Registration page in frontend (currently only backend auth is implemented)
+- ⏳ Role-based UI feature guards (hide/show features based on user role)
+- ⏳ Property Companies and Communities CRUD UI (backend exists, UI pending)
 - ⏳ File upload to object storage for documents
 - ⏳ OpenAI integration for document analysis and agreement extraction
 - ⏳ GoHighLevel and QuickBooks API integrations
