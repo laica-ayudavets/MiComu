@@ -2,8 +2,10 @@ import { db } from "./db";
 import { 
   type User, 
   type InsertUser,
-  type Tenant,
-  type InsertTenant,
+  type PropertyCompany,
+  type InsertPropertyCompany,
+  type Community,
+  type InsertCommunity,
   type Incident,
   type InsertIncident,
   type Document,
@@ -17,7 +19,8 @@ import {
   type Provider,
   type InsertProvider,
   users,
-  tenants,
+  propertyCompanies,
+  communities,
   incidents,
   documents,
   agreements,
@@ -28,50 +31,66 @@ import {
 import { eq, and, desc, sql } from "drizzle-orm";
 
 export interface IStorage {
+  // User management
   getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string, tenantId: string): Promise<User | undefined>;
-  getUserByEmail(email: string, tenantId: string): Promise<User | undefined>;
+  getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   
-  getTenant(id: string): Promise<Tenant | undefined>;
-  getTenantByDomain(domain: string): Promise<Tenant | undefined>;
-  createTenant(tenant: InsertTenant): Promise<Tenant>;
+  // Property Company management
+  getPropertyCompany(id: string): Promise<PropertyCompany | undefined>;
+  getPropertyCompanyByDomain(domain: string): Promise<PropertyCompany | undefined>;
+  createPropertyCompany(company: InsertPropertyCompany): Promise<PropertyCompany>;
   
-  getIncidents(tenantId: string): Promise<Incident[]>;
-  getIncident(id: string, tenantId: string): Promise<Incident | undefined>;
+  // Community management
+  getCommunities(propertyCompanyId: string): Promise<Community[]>;
+  getCommunity(id: string): Promise<Community | undefined>;
+  createCommunity(community: InsertCommunity): Promise<Community>;
+  updateCommunity(id: string, propertyCompanyId: string, updates: Partial<InsertCommunity>): Promise<Community | undefined>;
+  deleteCommunity(id: string, propertyCompanyId: string): Promise<boolean>;
+  
+  // Incident management (community-scoped)
+  getIncidents(communityId: string): Promise<Incident[]>;
+  getIncident(id: string, communityId: string): Promise<Incident | undefined>;
   createIncident(incident: InsertIncident): Promise<Incident>;
-  updateIncident(id: string, tenantId: string, incident: Partial<InsertIncident>): Promise<Incident | undefined>;
-  deleteIncident(id: string, tenantId: string): Promise<boolean>;
+  updateIncident(id: string, communityId: string, incident: Partial<InsertIncident>): Promise<Incident | undefined>;
+  deleteIncident(id: string, communityId: string): Promise<boolean>;
   
-  getDocuments(tenantId: string): Promise<Document[]>;
-  getDocument(id: string, tenantId: string): Promise<Document | undefined>;
+  // Document management (community-scoped)
+  getDocuments(communityId: string): Promise<Document[]>;
+  getDocument(id: string, communityId: string): Promise<Document | undefined>;
   createDocument(document: InsertDocument): Promise<Document>;
-  updateDocument(id: string, tenantId: string, updates: Partial<InsertDocument>): Promise<Document | undefined>;
-  deleteDocument(id: string, tenantId: string): Promise<boolean>;
+  updateDocument(id: string, communityId: string, updates: Partial<InsertDocument>): Promise<Document | undefined>;
+  deleteDocument(id: string, communityId: string): Promise<boolean>;
   
-  getAgreements(tenantId: string): Promise<Agreement[]>;
-  getAgreementsByDocument(documentId: string, tenantId: string): Promise<Agreement[]>;
+  // Agreement management (community-scoped)
+  getAgreements(communityId: string): Promise<Agreement[]>;
+  getAgreementsByDocument(documentId: string, communityId: string): Promise<Agreement[]>;
   createAgreement(agreement: InsertAgreement): Promise<Agreement>;
-  updateAgreement(id: string, tenantId: string, updates: Partial<InsertAgreement>): Promise<Agreement | undefined>;
-  deleteAgreement(id: string, tenantId: string): Promise<boolean>;
+  updateAgreement(id: string, communityId: string, updates: Partial<InsertAgreement>): Promise<Agreement | undefined>;
+  deleteAgreement(id: string, communityId: string): Promise<boolean>;
   
-  getDerramas(tenantId: string): Promise<Derrama[]>;
-  getDerrama(id: string, tenantId: string): Promise<Derrama | undefined>;
+  // Derrama management (community-scoped)
+  getDerramas(communityId: string): Promise<Derrama[]>;
+  getDerrama(id: string, communityId: string): Promise<Derrama | undefined>;
   createDerrama(derrama: InsertDerrama): Promise<Derrama>;
-  updateDerrama(id: string, tenantId: string, updates: Partial<InsertDerrama>): Promise<Derrama | undefined>;
-  deleteDerrama(id: string, tenantId: string): Promise<boolean>;
+  updateDerrama(id: string, communityId: string, updates: Partial<InsertDerrama>): Promise<Derrama | undefined>;
+  deleteDerrama(id: string, communityId: string): Promise<boolean>;
   
+  // Derrama Payment management
   getDerramaPayments(derramaId: string): Promise<DerramaPayment[]>;
   createDerramaPayment(payment: InsertDerramaPayment): Promise<DerramaPayment>;
-  updateDerramaPayment(id: string, tenantId: string, updates: Partial<InsertDerramaPayment>): Promise<DerramaPayment | undefined>;
+  updateDerramaPayment(id: string, communityId: string, updates: Partial<InsertDerramaPayment>): Promise<DerramaPayment | undefined>;
   
-  getProviders(tenantId: string): Promise<Provider[]>;
-  getProvider(id: string, tenantId: string): Promise<Provider | undefined>;
+  // Provider management (community-scoped)
+  getProviders(communityId: string): Promise<Provider[]>;
+  getProvider(id: string, communityId: string): Promise<Provider | undefined>;
   createProvider(provider: InsertProvider): Promise<Provider>;
-  updateProvider(id: string, tenantId: string, updates: Partial<InsertProvider>): Promise<Provider | undefined>;
-  deleteProvider(id: string, tenantId: string): Promise<boolean>;
+  updateProvider(id: string, communityId: string, updates: Partial<InsertProvider>): Promise<Provider | undefined>;
+  deleteProvider(id: string, communityId: string): Promise<boolean>;
   
-  getDashboardStats(tenantId: string): Promise<{
+  // Dashboard stats (community-scoped)
+  getDashboardStats(communityId: string): Promise<{
     totalIncidents: number;
     activeIncidents: number;
     totalDocuments: number;
@@ -80,21 +99,22 @@ export interface IStorage {
 }
 
 export class DbStorage implements IStorage {
+  // User methods
   async getUser(id: string): Promise<User | undefined> {
     const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
     return result[0];
   }
 
-  async getUserByUsername(username: string, tenantId: string): Promise<User | undefined> {
+  async getUserByUsername(username: string): Promise<User | undefined> {
     const result = await db.select().from(users)
-      .where(and(eq(users.username, username), eq(users.tenantId, tenantId)))
+      .where(eq(users.username, username))
       .limit(1);
     return result[0];
   }
 
-  async getUserByEmail(email: string, tenantId: string): Promise<User | undefined> {
+  async getUserByEmail(email: string): Promise<User | undefined> {
     const result = await db.select().from(users)
-      .where(and(eq(users.email, email), eq(users.tenantId, tenantId)))
+      .where(eq(users.email, email))
       .limit(1);
     return result[0];
   }
@@ -104,30 +124,65 @@ export class DbStorage implements IStorage {
     return result[0];
   }
 
-  async getTenant(id: string): Promise<Tenant | undefined> {
-    const result = await db.select().from(tenants).where(eq(tenants.id, id)).limit(1);
+  // Property Company methods
+  async getPropertyCompany(id: string): Promise<PropertyCompany | undefined> {
+    const result = await db.select().from(propertyCompanies).where(eq(propertyCompanies.id, id)).limit(1);
     return result[0];
   }
 
-  async getTenantByDomain(domain: string): Promise<Tenant | undefined> {
-    const result = await db.select().from(tenants).where(eq(tenants.domain, domain)).limit(1);
+  async getPropertyCompanyByDomain(domain: string): Promise<PropertyCompany | undefined> {
+    const result = await db.select().from(propertyCompanies).where(eq(propertyCompanies.domain, domain)).limit(1);
     return result[0];
   }
 
-  async createTenant(tenant: InsertTenant): Promise<Tenant> {
-    const result = await db.insert(tenants).values(tenant).returning();
+  async createPropertyCompany(company: InsertPropertyCompany): Promise<PropertyCompany> {
+    const result = await db.insert(propertyCompanies).values(company).returning();
     return result[0];
   }
 
-  async getIncidents(tenantId: string): Promise<Incident[]> {
+  // Community methods
+  async getCommunities(propertyCompanyId: string): Promise<Community[]> {
+    return db.select().from(communities)
+      .where(eq(communities.propertyCompanyId, propertyCompanyId))
+      .orderBy(desc(communities.createdAt));
+  }
+
+  async getCommunity(id: string): Promise<Community | undefined> {
+    const result = await db.select().from(communities)
+      .where(eq(communities.id, id))
+      .limit(1);
+    return result[0];
+  }
+
+  async createCommunity(community: InsertCommunity): Promise<Community> {
+    const result = await db.insert(communities).values(community).returning();
+    return result[0];
+  }
+
+  async updateCommunity(id: string, propertyCompanyId: string, updates: Partial<InsertCommunity>): Promise<Community | undefined> {
+    const result = await db.update(communities)
+      .set(updates)
+      .where(and(eq(communities.id, id), eq(communities.propertyCompanyId, propertyCompanyId)))
+      .returning();
+    return result[0];
+  }
+
+  async deleteCommunity(id: string, propertyCompanyId: string): Promise<boolean> {
+    const result = await db.delete(communities)
+      .where(and(eq(communities.id, id), eq(communities.propertyCompanyId, propertyCompanyId)));
+    return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  // Incident methods (now community-scoped)
+  async getIncidents(communityId: string): Promise<Incident[]> {
     return db.select().from(incidents)
-      .where(eq(incidents.tenantId, tenantId))
+      .where(eq(incidents.communityId, communityId))
       .orderBy(desc(incidents.createdAt));
   }
 
-  async getIncident(id: string, tenantId: string): Promise<Incident | undefined> {
+  async getIncident(id: string, communityId: string): Promise<Incident | undefined> {
     const result = await db.select().from(incidents)
-      .where(and(eq(incidents.id, id), eq(incidents.tenantId, tenantId)))
+      .where(and(eq(incidents.id, id), eq(incidents.communityId, communityId)))
       .limit(1);
     return result[0];
   }
@@ -137,29 +192,30 @@ export class DbStorage implements IStorage {
     return result[0];
   }
 
-  async updateIncident(id: string, tenantId: string, updates: Partial<InsertIncident>): Promise<Incident | undefined> {
+  async updateIncident(id: string, communityId: string, updates: Partial<InsertIncident>): Promise<Incident | undefined> {
     const result = await db.update(incidents)
       .set({ ...updates, updatedAt: new Date() })
-      .where(and(eq(incidents.id, id), eq(incidents.tenantId, tenantId)))
+      .where(and(eq(incidents.id, id), eq(incidents.communityId, communityId)))
       .returning();
     return result[0];
   }
 
-  async deleteIncident(id: string, tenantId: string): Promise<boolean> {
+  async deleteIncident(id: string, communityId: string): Promise<boolean> {
     const result = await db.delete(incidents)
-      .where(and(eq(incidents.id, id), eq(incidents.tenantId, tenantId)));
+      .where(and(eq(incidents.id, id), eq(incidents.communityId, communityId)));
     return result.rowCount !== null && result.rowCount > 0;
   }
 
-  async getDocuments(tenantId: string): Promise<Document[]> {
+  // Document methods (community-scoped)
+  async getDocuments(communityId: string): Promise<Document[]> {
     return db.select().from(documents)
-      .where(eq(documents.tenantId, tenantId))
+      .where(eq(documents.communityId, communityId))
       .orderBy(desc(documents.createdAt));
   }
 
-  async getDocument(id: string, tenantId: string): Promise<Document | undefined> {
+  async getDocument(id: string, communityId: string): Promise<Document | undefined> {
     const result = await db.select().from(documents)
-      .where(and(eq(documents.id, id), eq(documents.tenantId, tenantId)))
+      .where(and(eq(documents.id, id), eq(documents.communityId, communityId)))
       .limit(1);
     return result[0];
   }
@@ -169,29 +225,30 @@ export class DbStorage implements IStorage {
     return result[0];
   }
 
-  async updateDocument(id: string, tenantId: string, updates: Partial<InsertDocument>): Promise<Document | undefined> {
+  async updateDocument(id: string, communityId: string, updates: Partial<InsertDocument>): Promise<Document | undefined> {
     const result = await db.update(documents)
       .set(updates)
-      .where(and(eq(documents.id, id), eq(documents.tenantId, tenantId)))
+      .where(and(eq(documents.id, id), eq(documents.communityId, communityId)))
       .returning();
     return result[0];
   }
 
-  async deleteDocument(id: string, tenantId: string): Promise<boolean> {
+  async deleteDocument(id: string, communityId: string): Promise<boolean> {
     const result = await db.delete(documents)
-      .where(and(eq(documents.id, id), eq(documents.tenantId, tenantId)));
+      .where(and(eq(documents.id, id), eq(documents.communityId, communityId)));
     return result.rowCount !== null && result.rowCount > 0;
   }
 
-  async getAgreements(tenantId: string): Promise<Agreement[]> {
+  // Agreement methods (community-scoped)
+  async getAgreements(communityId: string): Promise<Agreement[]> {
     return db.select().from(agreements)
-      .where(eq(agreements.tenantId, tenantId))
+      .where(eq(agreements.communityId, communityId))
       .orderBy(desc(agreements.createdAt));
   }
 
-  async getAgreementsByDocument(documentId: string, tenantId: string): Promise<Agreement[]> {
+  async getAgreementsByDocument(documentId: string, communityId: string): Promise<Agreement[]> {
     return db.select().from(agreements)
-      .where(and(eq(agreements.documentId, documentId), eq(agreements.tenantId, tenantId)))
+      .where(and(eq(agreements.documentId, documentId), eq(agreements.communityId, communityId)))
       .orderBy(desc(agreements.createdAt));
   }
 
@@ -200,29 +257,30 @@ export class DbStorage implements IStorage {
     return result[0];
   }
 
-  async updateAgreement(id: string, tenantId: string, updates: Partial<InsertAgreement>): Promise<Agreement | undefined> {
+  async updateAgreement(id: string, communityId: string, updates: Partial<InsertAgreement>): Promise<Agreement | undefined> {
     const result = await db.update(agreements)
       .set(updates)
-      .where(and(eq(agreements.id, id), eq(agreements.tenantId, tenantId)))
+      .where(and(eq(agreements.id, id), eq(agreements.communityId, communityId)))
       .returning();
     return result[0];
   }
 
-  async deleteAgreement(id: string, tenantId: string): Promise<boolean> {
+  async deleteAgreement(id: string, communityId: string): Promise<boolean> {
     const result = await db.delete(agreements)
-      .where(and(eq(agreements.id, id), eq(agreements.tenantId, tenantId)));
+      .where(and(eq(agreements.id, id), eq(agreements.communityId, communityId)));
     return result.rowCount !== null && result.rowCount > 0;
   }
 
-  async getDerramas(tenantId: string): Promise<Derrama[]> {
+  // Derrama methods (community-scoped)
+  async getDerramas(communityId: string): Promise<Derrama[]> {
     return db.select().from(derramas)
-      .where(eq(derramas.tenantId, tenantId))
+      .where(eq(derramas.communityId, communityId))
       .orderBy(desc(derramas.createdAt));
   }
 
-  async getDerrama(id: string, tenantId: string): Promise<Derrama | undefined> {
+  async getDerrama(id: string, communityId: string): Promise<Derrama | undefined> {
     const result = await db.select().from(derramas)
-      .where(and(eq(derramas.id, id), eq(derramas.tenantId, tenantId)))
+      .where(and(eq(derramas.id, id), eq(derramas.communityId, communityId)))
       .limit(1);
     return result[0];
   }
@@ -232,20 +290,21 @@ export class DbStorage implements IStorage {
     return result[0];
   }
 
-  async updateDerrama(id: string, tenantId: string, updates: Partial<InsertDerrama>): Promise<Derrama | undefined> {
+  async updateDerrama(id: string, communityId: string, updates: Partial<InsertDerrama>): Promise<Derrama | undefined> {
     const result = await db.update(derramas)
       .set(updates)
-      .where(and(eq(derramas.id, id), eq(derramas.tenantId, tenantId)))
+      .where(and(eq(derramas.id, id), eq(derramas.communityId, communityId)))
       .returning();
     return result[0];
   }
 
-  async deleteDerrama(id: string, tenantId: string): Promise<boolean> {
+  async deleteDerrama(id: string, communityId: string): Promise<boolean> {
     const result = await db.delete(derramas)
-      .where(and(eq(derramas.id, id), eq(derramas.tenantId, tenantId)));
+      .where(and(eq(derramas.id, id), eq(derramas.communityId, communityId)));
     return result.rowCount !== null && result.rowCount > 0;
   }
 
+  // Derrama Payment methods
   async getDerramaPayments(derramaId: string): Promise<DerramaPayment[]> {
     return db.select().from(derramaPayments)
       .where(eq(derramaPayments.derramaId, derramaId))
@@ -257,7 +316,7 @@ export class DbStorage implements IStorage {
     return result[0];
   }
 
-  async updateDerramaPayment(id: string, tenantId: string, updates: Partial<InsertDerramaPayment>): Promise<DerramaPayment | undefined> {
+  async updateDerramaPayment(id: string, communityId: string, updates: Partial<InsertDerramaPayment>): Promise<DerramaPayment | undefined> {
     const result = await db.update(derramaPayments)
       .set(updates)
       .where(
@@ -269,7 +328,7 @@ export class DbStorage implements IStorage {
               .from(derramas)
               .where(and(
                 eq(derramas.id, derramaPayments.derramaId),
-                eq(derramas.tenantId, tenantId)
+                eq(derramas.communityId, communityId)
               ))
           )
         )
@@ -278,15 +337,16 @@ export class DbStorage implements IStorage {
     return result[0];
   }
 
-  async getProviders(tenantId: string): Promise<Provider[]> {
+  // Provider methods (community-scoped)
+  async getProviders(communityId: string): Promise<Provider[]> {
     return db.select().from(providers)
-      .where(eq(providers.tenantId, tenantId))
+      .where(eq(providers.communityId, communityId))
       .orderBy(desc(providers.createdAt));
   }
 
-  async getProvider(id: string, tenantId: string): Promise<Provider | undefined> {
+  async getProvider(id: string, communityId: string): Promise<Provider | undefined> {
     const result = await db.select().from(providers)
-      .where(and(eq(providers.id, id), eq(providers.tenantId, tenantId)))
+      .where(and(eq(providers.id, id), eq(providers.communityId, communityId)))
       .limit(1);
     return result[0];
   }
@@ -296,21 +356,22 @@ export class DbStorage implements IStorage {
     return result[0];
   }
 
-  async updateProvider(id: string, tenantId: string, updates: Partial<InsertProvider>): Promise<Provider | undefined> {
+  async updateProvider(id: string, communityId: string, updates: Partial<InsertProvider>): Promise<Provider | undefined> {
     const result = await db.update(providers)
       .set(updates)
-      .where(and(eq(providers.id, id), eq(providers.tenantId, tenantId)))
+      .where(and(eq(providers.id, id), eq(providers.communityId, communityId)))
       .returning();
     return result[0];
   }
 
-  async deleteProvider(id: string, tenantId: string): Promise<boolean> {
+  async deleteProvider(id: string, communityId: string): Promise<boolean> {
     const result = await db.delete(providers)
-      .where(and(eq(providers.id, id), eq(providers.tenantId, tenantId)));
+      .where(and(eq(providers.id, id), eq(providers.communityId, communityId)));
     return result.rowCount !== null && result.rowCount > 0;
   }
 
-  async getDashboardStats(tenantId: string): Promise<{
+  // Dashboard stats (community-scoped)
+  async getDashboardStats(communityId: string): Promise<{
     totalIncidents: number;
     activeIncidents: number;
     totalDocuments: number;
@@ -318,23 +379,23 @@ export class DbStorage implements IStorage {
   }> {
     const [incidentsCount] = await db.select({ count: sql<number>`count(*)::int` })
       .from(incidents)
-      .where(eq(incidents.tenantId, tenantId));
+      .where(eq(incidents.communityId, communityId));
     
     const [activeIncidentsCount] = await db.select({ count: sql<number>`count(*)::int` })
       .from(incidents)
       .where(and(
-        eq(incidents.tenantId, tenantId),
+        eq(incidents.communityId, communityId),
         sql`${incidents.status} != 'resuelto'`
       ));
     
     const [documentsCount] = await db.select({ count: sql<number>`count(*)::int` })
       .from(documents)
-      .where(eq(documents.tenantId, tenantId));
+      .where(eq(documents.communityId, communityId));
     
     const [derramasCount] = await db.select({ count: sql<number>`count(*)::int` })
       .from(derramas)
       .where(and(
-        eq(derramas.tenantId, tenantId),
+        eq(derramas.communityId, communityId),
         sql`${derramas.dueDate} >= CURRENT_DATE`
       ));
 

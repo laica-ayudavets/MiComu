@@ -3,12 +3,14 @@ import { pgTable, text, varchar, timestamp, integer, boolean, decimal, pgEnum } 
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const roleEnum = pgEnum("role", ["admin", "user"]);
+// Updated role enum for 3-tier hierarchy
+export const roleEnum = pgEnum("role", ["admin_fincas", "presidente", "vecino"]);
 export const incidentStatusEnum = pgEnum("incident_status", ["pendiente", "en_curso", "resuelto"]);
 export const incidentPriorityEnum = pgEnum("incident_priority", ["alta", "media", "baja"]);
 export const agreementStatusEnum = pgEnum("agreement_status", ["pendiente", "aprobado", "rechazado"]);
 
-export const tenants = pgTable("tenants", {
+// Tier 1: Property Management Companies (Administradores de Fincas)
+export const propertyCompanies = pgTable("property_companies", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   domain: text("domain").unique(),
@@ -18,21 +20,49 @@ export const tenants = pgTable("tenants", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const insertTenantSchema = createInsertSchema(tenants).omit({
+export const insertPropertyCompanySchema = createInsertSchema(propertyCompanies).omit({
   id: true,
   createdAt: true,
 });
-export type InsertTenant = z.infer<typeof insertTenantSchema>;
-export type Tenant = typeof tenants.$inferSelect;
+export type InsertPropertyCompany = z.infer<typeof insertPropertyCompanySchema>;
+export type PropertyCompany = typeof propertyCompanies.$inferSelect;
 
+// Tier 2: Communities (Comunidades de vecinos)
+export const communities = pgTable("communities", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  propertyCompanyId: varchar("property_company_id").notNull().references(() => propertyCompanies.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  address: text("address").notNull(),
+  postalCode: text("postal_code"),
+  city: text("city").notNull(),
+  province: text("province"),
+  totalUnits: integer("total_units").notNull(), // Total number of units/apartments
+  presidentId: varchar("president_id"), // Will be linked to users later
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertCommunitySchema = createInsertSchema(communities).omit({
+  id: true,
+  createdAt: true,
+});
+export const updateCommunitySchema = insertCommunitySchema.partial().omit({
+  propertyCompanyId: true,
+});
+export type InsertCommunity = z.infer<typeof insertCommunitySchema>;
+export type UpdateCommunity = z.infer<typeof updateCommunitySchema>;
+export type Community = typeof communities.$inferSelect;
+
+// Tier 3: Users (Vecinos, Presidentes, and Property Company Admins)
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  communityId: varchar("community_id").references(() => communities.id, { onDelete: "cascade" }), // Null for admin_fincas users
+  propertyCompanyId: varchar("property_company_id").references(() => propertyCompanies.id, { onDelete: "cascade" }), // For admin_fincas users
   username: text("username").notNull(),
   password: text("password").notNull(),
   email: text("email").notNull(),
-  role: roleEnum("role").notNull().default("user"),
+  role: roleEnum("role").notNull().default("vecino"),
   fullName: text("full_name"),
+  unitNumber: text("unit_number"), // Apartment/unit number for residents
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -40,12 +70,18 @@ export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
 });
+export const updateUserSchema = insertUserSchema.partial().omit({
+  communityId: true,
+  propertyCompanyId: true,
+});
 export type InsertUser = z.infer<typeof insertUserSchema>;
+export type UpdateUser = z.infer<typeof updateUserSchema>;
 export type User = typeof users.$inferSelect;
 
+// Domain entities now belong to communities
 export const incidents = pgTable("incidents", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  communityId: varchar("community_id").notNull().references(() => communities.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
   description: text("description").notNull(),
   status: incidentStatusEnum("status").notNull().default("pendiente"),
@@ -65,7 +101,7 @@ export const insertIncidentSchema = createInsertSchema(incidents).omit({
   updatedAt: true,
 });
 export const updateIncidentSchema = insertIncidentSchema.partial().omit({
-  tenantId: true,
+  communityId: true,
 });
 export type InsertIncident = z.infer<typeof insertIncidentSchema>;
 export type UpdateIncident = z.infer<typeof updateIncidentSchema>;
@@ -73,7 +109,7 @@ export type Incident = typeof incidents.$inferSelect;
 
 export const documents = pgTable("documents", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  communityId: varchar("community_id").notNull().references(() => communities.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
   description: text("description"),
   type: text("type").notNull(),
@@ -90,7 +126,7 @@ export const insertDocumentSchema = createInsertSchema(documents).omit({
   createdAt: true,
 });
 export const updateDocumentSchema = insertDocumentSchema.partial().omit({
-  tenantId: true,
+  communityId: true,
 });
 export type InsertDocument = z.infer<typeof insertDocumentSchema>;
 export type UpdateDocument = z.infer<typeof updateDocumentSchema>;
@@ -98,7 +134,7 @@ export type Document = typeof documents.$inferSelect;
 
 export const agreements = pgTable("agreements", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  communityId: varchar("community_id").notNull().references(() => communities.id, { onDelete: "cascade" }),
   documentId: varchar("document_id").references(() => documents.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
   description: text("description").notNull(),
@@ -113,7 +149,7 @@ export const insertAgreementSchema = createInsertSchema(agreements).omit({
   createdAt: true,
 });
 export const updateAgreementSchema = insertAgreementSchema.partial().omit({
-  tenantId: true,
+  communityId: true,
 });
 export type InsertAgreement = z.infer<typeof insertAgreementSchema>;
 export type UpdateAgreement = z.infer<typeof updateAgreementSchema>;
@@ -121,7 +157,7 @@ export type Agreement = typeof agreements.$inferSelect;
 
 export const derramas = pgTable("derramas", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  communityId: varchar("community_id").notNull().references(() => communities.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
   description: text("description"),
   totalAmount: decimal("total_amount", { precision: 10, scale: 2 }).notNull(),
@@ -137,7 +173,7 @@ export const insertDerramaSchema = createInsertSchema(derramas, {
   createdAt: true,
 });
 export const updateDerramaSchema = insertDerramaSchema.partial().omit({
-  tenantId: true,
+  communityId: true,
 });
 export type InsertDerrama = z.infer<typeof insertDerramaSchema>;
 export type UpdateDerrama = z.infer<typeof updateDerramaSchema>;
@@ -167,7 +203,7 @@ export type DerramaPayment = typeof derramaPayments.$inferSelect;
 
 export const providers = pgTable("providers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  communityId: varchar("community_id").notNull().references(() => communities.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   category: text("category").notNull(),
   phone: text("phone"),
@@ -183,7 +219,7 @@ export const insertProviderSchema = createInsertSchema(providers).omit({
   createdAt: true,
 });
 export const updateProviderSchema = insertProviderSchema.partial().omit({
-  tenantId: true,
+  communityId: true,
 });
 export type InsertProvider = z.infer<typeof insertProviderSchema>;
 export type UpdateProvider = z.infer<typeof updateProviderSchema>;
