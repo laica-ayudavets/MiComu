@@ -8,6 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -36,7 +43,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Search, MoreVertical, Trash2, Edit, Calendar as CalendarIcon } from "lucide-react";
+import { Plus, Search, MoreVertical, Trash2, Edit, Calendar as CalendarIcon, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { format } from "date-fns";
@@ -45,6 +52,7 @@ import type { Derrama, InsertDerrama } from "@shared/schema";
 import { insertDerramaSchema } from "@shared/schema";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
+import { useCommunities, useUser } from "@/hooks/use-auth";
 
 const formSchema = z.object({
   title: z.string().min(1, "El título es requerido"),
@@ -57,9 +65,14 @@ type FormValues = z.infer<typeof formSchema>;
 
 export default function Derramas() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [communityFilter, setCommunityFilter] = useState("todas");
+  const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined);
+  const [dateTo, setDateTo] = useState<Date | undefined>(undefined);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingDerrama, setEditingDerrama] = useState<Derrama | null>(null);
   const { toast } = useToast();
+  const { data: user } = useUser();
+  const { data: communities = [] } = useCommunities();
 
   const { data: derramas = [], isLoading } = useQuery<Derrama[]>({
     queryKey: ["/api/derramas"],
@@ -147,11 +160,21 @@ export default function Derramas() {
   });
 
   const filteredDerramas = useMemo(() => {
-    return derramas.filter((derrama) =>
-      searchTerm === "" ||
-      derrama.title.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [derramas, searchTerm]);
+    const endOfSelectedDay = dateTo ? new Date(dateTo.getFullYear(), dateTo.getMonth(), dateTo.getDate(), 23, 59, 59, 999) : undefined;
+    
+    return derramas.filter((derrama) => {
+      const matchesSearch =
+        searchTerm === "" ||
+        derrama.title.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesCommunity = communityFilter === "todas" || derrama.communityId === communityFilter;
+      
+      const derramaDate = new Date(derrama.createdAt);
+      const matchesDateFrom = !dateFrom || derramaDate >= dateFrom;
+      const matchesDateTo = !endOfSelectedDay || derramaDate <= endOfSelectedDay;
+      
+      return matchesSearch && matchesCommunity && matchesDateFrom && matchesDateTo;
+    });
+  }, [derramas, searchTerm, communityFilter, dateFrom, dateTo]);
 
   const onSubmit = (data: FormValues) => {
     if (editingDerrama) {
@@ -355,15 +378,110 @@ export default function Derramas() {
         </Dialog>
       </div>
 
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input
-          placeholder="Buscar derramas..."
-          className="pl-9"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          data-testid="input-search-derramas"
-        />
+      <div className="space-y-4">
+        <div className="flex gap-4 flex-wrap">
+          <div className="relative flex-1 min-w-[200px] max-w-md">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar derramas..."
+              className="pl-9"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              data-testid="input-search-derramas"
+            />
+          </div>
+          {user?.role === "admin_fincas" && (
+            <Select value={communityFilter} onValueChange={setCommunityFilter}>
+              <SelectTrigger className="w-[200px]" data-testid="select-filter-community">
+                <SelectValue placeholder="Comunidad" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todas">Todas las comunidades</SelectItem>
+                {communities.map((comm) => (
+                  <SelectItem key={comm.id} value={comm.id}>{comm.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+        
+        <div className="flex gap-4 flex-wrap items-center">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Desde:</span>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-[180px] justify-start text-left font-normal",
+                    !dateFrom && "text-muted-foreground"
+                  )}
+                  data-testid="button-filter-date-from"
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {dateFrom ? format(dateFrom, "PP", { locale: es }) : "Seleccionar"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={dateFrom}
+                  onSelect={setDateFrom}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+            {dateFrom && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setDateFrom(undefined)}
+                data-testid="button-clear-date-from"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Hasta:</span>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-[180px] justify-start text-left font-normal",
+                    !dateTo && "text-muted-foreground"
+                  )}
+                  data-testid="button-filter-date-to"
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {dateTo ? format(dateTo, "PP", { locale: es }) : "Seleccionar"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={dateTo}
+                  onSelect={setDateTo}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+            {dateTo && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setDateTo(undefined)}
+                data-testid="button-clear-date-to"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        </div>
       </div>
 
       {isLoading ? (

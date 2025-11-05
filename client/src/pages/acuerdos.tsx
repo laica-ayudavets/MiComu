@@ -44,7 +44,7 @@ import {
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Search, MoreVertical, Trash2, CheckCircle, XCircle, Clock, CalendarIcon } from "lucide-react";
+import { Plus, Search, MoreVertical, Trash2, CheckCircle, XCircle, Clock, CalendarIcon, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { Agreement, InsertAgreement } from "@shared/schema";
@@ -52,6 +52,8 @@ import { insertAgreementSchema } from "@shared/schema";
 import { z } from "zod";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { useCommunities, useUser } from "@/hooks/use-auth";
+import { cn } from "@/lib/utils";
 
 const formSchema = insertAgreementSchema.extend({
   title: z.string().min(1, "El título es requerido"),
@@ -64,8 +66,13 @@ type FormValues = z.infer<typeof formSchema>;
 export default function Acuerdos() {
   const [filter, setFilter] = useState("todos");
   const [searchTerm, setSearchTerm] = useState("");
+  const [communityFilter, setCommunityFilter] = useState("todas");
+  const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined);
+  const [dateTo, setDateTo] = useState<Date | undefined>(undefined);
   const [dialogOpen, setDialogOpen] = useState(false);
   const { toast } = useToast();
+  const { data: user } = useUser();
+  const { data: communities = [] } = useCommunities();
 
   const { data: agreements = [], isLoading } = useQuery<Agreement[]>({
     queryKey: ["/api/agreements"],
@@ -149,15 +156,23 @@ export default function Acuerdos() {
   });
 
   const filteredAgreements = useMemo(() => {
+    const endOfSelectedDay = dateTo ? new Date(dateTo.getFullYear(), dateTo.getMonth(), dateTo.getDate(), 23, 59, 59, 999) : undefined;
+    
     return agreements.filter((agreement) => {
       const matchesFilter = filter === "todos" || agreement.status === filter;
       const matchesSearch =
         searchTerm === "" ||
         agreement.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (agreement.responsible && agreement.responsible.toLowerCase().includes(searchTerm.toLowerCase()));
-      return matchesFilter && matchesSearch;
+      const matchesCommunity = communityFilter === "todas" || agreement.communityId === communityFilter;
+      
+      const agreementDate = new Date(agreement.createdAt);
+      const matchesDateFrom = !dateFrom || agreementDate >= dateFrom;
+      const matchesDateTo = !endOfSelectedDay || agreementDate <= endOfSelectedDay;
+      
+      return matchesFilter && matchesSearch && matchesCommunity && matchesDateFrom && matchesDateTo;
     });
-  }, [agreements, filter, searchTerm]);
+  }, [agreements, filter, searchTerm, communityFilter, dateFrom, dateTo]);
 
   const onSubmit = (data: FormValues) => {
     createMutation.mutate(data);
@@ -343,28 +358,121 @@ export default function Acuerdos() {
         </Dialog>
       </div>
 
-      <div className="flex gap-4 flex-wrap">
-        <div className="relative flex-1 min-w-[200px] max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar acuerdos..."
-            className="pl-9"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            data-testid="input-search-agreements"
-          />
+      <div className="space-y-4">
+        <div className="flex gap-4 flex-wrap">
+          <div className="relative flex-1 min-w-[200px] max-w-md">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar acuerdos..."
+              className="pl-9"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              data-testid="input-search-agreements"
+            />
+          </div>
+          <Select value={filter} onValueChange={setFilter}>
+            <SelectTrigger className="w-[180px]" data-testid="select-filter-status">
+              <SelectValue placeholder="Filtrar por estado" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos</SelectItem>
+              <SelectItem value="pendiente">Pendientes</SelectItem>
+              <SelectItem value="aprobado">Aprobados</SelectItem>
+              <SelectItem value="rechazado">Rechazados</SelectItem>
+            </SelectContent>
+          </Select>
+          {user?.role === "admin_fincas" && (
+            <Select value={communityFilter} onValueChange={setCommunityFilter}>
+              <SelectTrigger className="w-[200px]" data-testid="select-filter-community">
+                <SelectValue placeholder="Comunidad" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todas">Todas las comunidades</SelectItem>
+                {communities.map((comm) => (
+                  <SelectItem key={comm.id} value={comm.id}>{comm.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
-        <Select value={filter} onValueChange={setFilter}>
-          <SelectTrigger className="w-[180px]" data-testid="select-filter-status">
-            <SelectValue placeholder="Filtrar por estado" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos</SelectItem>
-            <SelectItem value="pendiente">Pendientes</SelectItem>
-            <SelectItem value="aprobado">Aprobados</SelectItem>
-            <SelectItem value="rechazado">Rechazados</SelectItem>
-          </SelectContent>
-        </Select>
+        
+        <div className="flex gap-4 flex-wrap items-center">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Desde:</span>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-[180px] justify-start text-left font-normal",
+                    !dateFrom && "text-muted-foreground"
+                  )}
+                  data-testid="button-filter-date-from"
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {dateFrom ? format(dateFrom, "PP", { locale: es }) : "Seleccionar"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={dateFrom}
+                  onSelect={setDateFrom}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+            {dateFrom && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setDateFrom(undefined)}
+                data-testid="button-clear-date-from"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Hasta:</span>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-[180px] justify-start text-left font-normal",
+                    !dateTo && "text-muted-foreground"
+                  )}
+                  data-testid="button-filter-date-to"
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {dateTo ? format(dateTo, "PP", { locale: es }) : "Seleccionar"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={dateTo}
+                  onSelect={setDateTo}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+            {dateTo && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setDateTo(undefined)}
+                data-testid="button-clear-date-to"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        </div>
       </div>
 
       {isLoading ? (

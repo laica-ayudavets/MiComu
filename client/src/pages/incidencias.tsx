@@ -162,6 +162,8 @@ export default function Incidencias() {
   });
 
   const filteredIncidents = useMemo(() => {
+    const endOfSelectedDay = dateTo ? new Date(dateTo.getFullYear(), dateTo.getMonth(), dateTo.getDate(), 23, 59, 59, 999) : undefined;
+    
     return incidents.filter((incident) => {
       const matchesFilter = filter === "todas" || incident.status === filter;
       const matchesSearch =
@@ -173,7 +175,7 @@ export default function Incidencias() {
       
       const incidentDate = new Date(incident.createdAt);
       const matchesDateFrom = !dateFrom || incidentDate >= dateFrom;
-      const matchesDateTo = !dateTo || incidentDate <= new Date(dateTo.setHours(23, 59, 59, 999));
+      const matchesDateTo = !endOfSelectedDay || incidentDate <= endOfSelectedDay;
       
       return matchesFilter && matchesSearch && matchesCategory && matchesCommunity && matchesDateFrom && matchesDateTo;
     });
