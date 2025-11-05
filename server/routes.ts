@@ -23,6 +23,10 @@ import {
   updateDerramaPaymentSchema,
   insertProviderSchema,
   updateProviderSchema,
+  insertQuotaTypeSchema,
+  updateQuotaTypeSchema,
+  insertQuotaAssignmentSchema,
+  updateQuotaAssignmentSchema,
   insertPropertyCompanySchema,
   insertCommunitySchema,
   insertUserSchema,
@@ -689,6 +693,174 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting provider:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Quota Types endpoints
+  app.get("/api/quota-types", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const communityId = getCommunityId(req);
+      const quotaTypes = await storage.getQuotaTypes(communityId);
+      res.json(quotaTypes);
+    } catch (error) {
+      console.error("Error fetching quota types:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/quota-types/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const communityId = getCommunityId(req);
+      const quotaType = await storage.getQuotaType(req.params.id, communityId);
+      if (!quotaType) {
+        return res.status(404).json({ error: "Quota type not found" });
+      }
+      res.json(quotaType);
+    } catch (error) {
+      console.error("Error fetching quota type:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/quota-types", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const communityId = getCommunityId(req);
+      const data = insertQuotaTypeSchema.parse({ ...req.body, communityId });
+      const quotaType = await storage.createQuotaType(data);
+      res.status(201).json(quotaType);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation error", details: error.errors });
+      }
+      console.error("Error creating quota type:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/quota-types/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const communityId = getCommunityId(req);
+      const data = updateQuotaTypeSchema.parse(req.body);
+      const quotaType = await storage.updateQuotaType(req.params.id, communityId, data);
+      if (!quotaType) {
+        return res.status(404).json({ error: "Quota type not found" });
+      }
+      res.json(quotaType);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation error", details: error.errors });
+      }
+      console.error("Error updating quota type:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/quota-types/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const communityId = getCommunityId(req);
+      const deleted = await storage.deleteQuotaType(req.params.id, communityId);
+      if (!deleted) {
+        return res.status(404).json({ error: "Quota type not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting quota type:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Quota Assignments endpoints
+  app.get("/api/quota-assignments", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const communityId = getCommunityId(req);
+      const assignments = await storage.getQuotaAssignments(communityId);
+      res.json(assignments);
+    } catch (error) {
+      console.error("Error fetching quota assignments:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/quota-assignments/user/:userId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const communityId = getCommunityId(req);
+      const assignments = await storage.getQuotaAssignmentsByUser(req.params.userId, communityId);
+      res.json(assignments);
+    } catch (error) {
+      console.error("Error fetching user quota assignments:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/quota-assignments/quota-type/:quotaTypeId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const communityId = getCommunityId(req);
+      const assignments = await storage.getQuotaAssignmentsByQuotaType(req.params.quotaTypeId, communityId);
+      res.json(assignments);
+    } catch (error) {
+      console.error("Error fetching quota type assignments:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/quota-assignments/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const communityId = getCommunityId(req);
+      const assignment = await storage.getQuotaAssignment(req.params.id, communityId);
+      if (!assignment) {
+        return res.status(404).json({ error: "Quota assignment not found" });
+      }
+      res.json(assignment);
+    } catch (error) {
+      console.error("Error fetching quota assignment:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/quota-assignments", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const communityId = getCommunityId(req);
+      const data = insertQuotaAssignmentSchema.parse({ ...req.body, communityId });
+      const assignment = await storage.createQuotaAssignment(data);
+      res.status(201).json(assignment);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation error", details: error.errors });
+      }
+      console.error("Error creating quota assignment:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/quota-assignments/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const communityId = getCommunityId(req);
+      const data = updateQuotaAssignmentSchema.parse(req.body);
+      const assignment = await storage.updateQuotaAssignment(req.params.id, communityId, data);
+      if (!assignment) {
+        return res.status(404).json({ error: "Quota assignment not found" });
+      }
+      res.json(assignment);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation error", details: error.errors });
+      }
+      console.error("Error updating quota assignment:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/quota-assignments/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const communityId = getCommunityId(req);
+      const deleted = await storage.deleteQuotaAssignment(req.params.id, communityId);
+      if (!deleted) {
+        return res.status(404).json({ error: "Quota assignment not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting quota assignment:", error);
       res.status(500).json({ error: "Internal server error" });
     }
   });
