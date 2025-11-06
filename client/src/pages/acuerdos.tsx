@@ -59,6 +59,7 @@ const formSchema = insertAgreementSchema.extend({
   title: z.string().min(1, "El título es requerido"),
   description: z.string().min(1, "La descripción es requerida"),
   deadline: z.coerce.date().nullable().optional(),
+  communityId: z.string().min(1, "Debe seleccionar una comunidad"),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -176,17 +177,22 @@ export default function Acuerdos() {
   }, [agreements, filter, searchTerm, communityFilter, dateFrom, dateTo]);
 
   const onSubmit = (data: FormValues) => {
-    if (!currentCommunity?.id) {
+    // Para admin_fincas, usar la comunidad seleccionada en el formulario
+    // Para otros roles, usar la comunidad actual
+    const communityIdToUse = user?.role === "admin_fincas" ? data.communityId : currentCommunity?.id;
+    
+    if (!communityIdToUse) {
       toast({
         title: "Error",
-        description: "No hay una comunidad seleccionada",
+        description: "Debe seleccionar una comunidad",
         variant: "destructive",
       });
       return;
     }
+    
     createMutation.mutate({
       ...data,
-      communityId: currentCommunity.id,
+      communityId: communityIdToUse,
     });
   };
 
@@ -225,6 +231,36 @@ export default function Acuerdos() {
             </DialogHeader>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                {user?.role === "admin_fincas" && (
+                  <FormField
+                    control={form.control}
+                    name="communityId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Comunidad *</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger data-testid="select-agreement-community">
+                              <SelectValue placeholder="Selecciona una comunidad" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {communities.map((comm) => (
+                              <SelectItem key={comm.id} value={comm.id}>
+                                {comm.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
                 <FormField
                   control={form.control}
                   name="title"

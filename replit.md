@@ -40,6 +40,13 @@ The system is built as a full-stack TypeScript application with a modern React f
   - Updated form defaultValues to use `useCurrentCommunity` hook
   - Fixed both create and edit operations across all modules
 
+**UX Improvements (November 6, 2025):**
+- ✅ **Admin_fincas Community Selection Pattern**: When creating entities, admin_fincas users must explicitly select a community as the first field in the form
+  - **Implemented in**: Incidencias, Acuerdos
+  - **Pending**: Documentos, Derramas, Proveedores, Cuotas
+  - Community field marked with asterisk (*) indicating it's required
+  - Non-admin users (presidente, vecino) continue using their assigned community automatically
+
 **Recent Updates (November 5, 2025):**
 - ✅ **Login Page**: Full authentication UI with email/password form, Zod validation, and automatic redirect
 - ✅ **Protected Routes**: Automatic redirection to login for unauthenticated users
