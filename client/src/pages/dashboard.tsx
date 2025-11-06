@@ -1,7 +1,7 @@
 import { StatCard } from "@/components/stat-card";
 import { ActivityFeed } from "@/components/activity-feed";
 import { IncidentCard } from "@/components/incident-card";
-import { AlertCircle, FileText, CheckSquare, DollarSign } from "lucide-react";
+import { AlertCircle, FileText, CheckSquare, DollarSign, Receipt, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useQuery } from "@tanstack/react-query";
@@ -12,6 +12,8 @@ interface DashboardStats {
   activeIncidents: number;
   totalDocuments: number;
   activeDerramas: number;
+  totalDerramas: number;
+  unpaidQuotas: number;
 }
 
 export default function Dashboard() {
@@ -30,6 +32,8 @@ export default function Dashboard() {
     { title: "Incidencias Activas", value: stats.activeIncidents, icon: AlertCircle },
     { title: "Documentos", value: stats.totalDocuments, icon: FileText },
     { title: "Derramas Activas", value: stats.activeDerramas, icon: DollarSign },
+    { title: "Total Derramas", value: stats.totalDerramas, icon: Receipt },
+    { title: "Cuotas Impagadas", value: stats.unpaidQuotas, icon: AlertTriangle },
   ] : [];
 
   const activities = [
@@ -75,10 +79,10 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {statsLoading ? (
           <>
-            {[...Array(4)].map((_, i) => (
+            {[...Array(6)].map((_, i) => (
               <Card key={i} className="h-32 animate-pulse border-0 shadow-md">
                 <CardContent className="p-6" />
               </Card>

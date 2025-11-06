@@ -117,6 +117,8 @@ export interface IStorage {
     activeIncidents: number;
     totalDocuments: number;
     activeDerramas: number;
+    totalDerramas: number;
+    unpaidQuotas: number;
   }>;
 }
 
@@ -476,6 +478,8 @@ export class DbStorage implements IStorage {
     activeIncidents: number;
     totalDocuments: number;
     activeDerramas: number;
+    totalDerramas: number;
+    unpaidQuotas: number;
   }> {
     const [incidentsCount] = await db.select({ count: sql<number>`count(*)::int` })
       .from(incidents)
@@ -492,18 +496,31 @@ export class DbStorage implements IStorage {
       .from(documents)
       .where(eq(documents.communityId, communityId));
     
-    const [derramasCount] = await db.select({ count: sql<number>`count(*)::int` })
+    const [activeDerramas] = await db.select({ count: sql<number>`count(*)::int` })
       .from(derramas)
       .where(and(
         eq(derramas.communityId, communityId),
         sql`${derramas.dueDate} >= CURRENT_DATE`
       ));
 
+    const [totalDerramasCount] = await db.select({ count: sql<number>`count(*)::int` })
+      .from(derramas)
+      .where(eq(derramas.communityId, communityId));
+
+    const [unpaidQuotasCount] = await db.select({ count: sql<number>`count(*)::int` })
+      .from(quotaAssignments)
+      .where(and(
+        eq(quotaAssignments.communityId, communityId),
+        sql`${quotaAssignments.status} IN ('pendiente', 'vencida')`
+      ));
+
     return {
       totalIncidents: incidentsCount?.count || 0,
       activeIncidents: activeIncidentsCount?.count || 0,
       totalDocuments: documentsCount?.count || 0,
-      activeDerramas: derramasCount?.count || 0,
+      activeDerramas: activeDerramas?.count || 0,
+      totalDerramas: totalDerramasCount?.count || 0,
+      unpaidQuotas: unpaidQuotasCount?.count || 0,
     };
   }
 }

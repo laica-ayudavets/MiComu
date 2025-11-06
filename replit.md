@@ -46,6 +46,11 @@ The system is built as a full-stack TypeScript application with a modern React f
   - **Pending**: Documentos, Proveedores, Cuotas
   - Community field marked with asterisk (*) indicating it's required
   - Non-admin users (presidente, vecino) continue using their assigned community automatically
+- ✅ **Enhanced Dashboard Statistics**: Dashboard now includes comprehensive financial and payment tracking
+  - Total Derramas count (all derramas in the community)
+  - Cuotas Impagadas count (unpaid quotas with status 'pendiente' or 'vencida')
+  - Updated grid layout to accommodate 6 stat cards (3 columns)
+  - Visual indicators with appropriate icons (Receipt for derramas, AlertTriangle for unpaid quotas)
 
 **Recent Updates (November 5, 2025):**
 - ✅ **Login Page**: Full authentication UI with email/password form, Zod validation, and automatic redirect
