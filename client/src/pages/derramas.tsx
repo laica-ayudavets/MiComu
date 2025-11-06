@@ -59,6 +59,7 @@ const formSchema = z.object({
   description: z.string().optional(),
   totalAmount: z.string().min(1, "El monto es requerido"),
   dueDate: z.date({ required_error: "La fecha de vencimiento es requerida" }),
+  communityId: z.string().min(1, "Debe seleccionar una comunidad"),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -82,6 +83,7 @@ export default function Derramas() {
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      communityId: currentCommunity?.id || "",
       title: "",
       description: "",
       totalAmount: "",
@@ -178,18 +180,23 @@ export default function Derramas() {
   }, [derramas, searchTerm, communityFilter, dateFrom, dateTo]);
 
   const onSubmit = (data: FormValues) => {
-    if (!currentCommunity?.id) {
+    // Para admin_fincas, usar la comunidad seleccionada en el formulario
+    // Para otros roles, usar la comunidad actual
+    const communityIdToUse = user?.role === "admin_fincas" ? data.communityId : currentCommunity?.id;
+    
+    if (!communityIdToUse) {
       toast({
         title: "Error",
-        description: "No hay una comunidad seleccionada",
+        description: "Debe seleccionar una comunidad",
         variant: "destructive",
       });
       return;
     }
+    
     if (editingDerrama) {
       updateMutation.mutate({ id: editingDerrama.id, data });
     } else {
-      createMutation.mutate({ ...data, communityId: currentCommunity.id });
+      createMutation.mutate({ ...data, communityId: communityIdToUse });
     }
   };
 
@@ -213,6 +220,7 @@ export default function Derramas() {
   const handleNewDerrama = () => {
     setEditingDerrama(null);
     form.reset({
+      communityId: currentCommunity?.id || "",
       title: "",
       description: "",
       totalAmount: "",
@@ -250,6 +258,36 @@ export default function Derramas() {
             </DialogHeader>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                {!editingDerrama && user?.role === "admin_fincas" && (
+                  <FormField
+                    control={form.control}
+                    name="communityId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Comunidad *</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger data-testid="select-derrama-community">
+                              <SelectValue placeholder="Selecciona una comunidad" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {communities.map((comm) => (
+                              <SelectItem key={comm.id} value={comm.id}>
+                                {comm.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
                 <FormField
                   control={form.control}
                   name="title"

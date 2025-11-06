@@ -42,8 +42,8 @@ The system is built as a full-stack TypeScript application with a modern React f
 
 **UX Improvements (November 6, 2025):**
 - ✅ **Admin_fincas Community Selection Pattern**: When creating entities, admin_fincas users must explicitly select a community as the first field in the form
-  - **Implemented in**: Incidencias, Acuerdos
-  - **Pending**: Documentos, Derramas, Proveedores, Cuotas
+  - **Implemented in**: Incidencias, Acuerdos, Derramas
+  - **Pending**: Documentos, Proveedores, Cuotas
   - Community field marked with asterisk (*) indicating it's required
   - Non-admin users (presidente, vecino) continue using their assigned community automatically
 
