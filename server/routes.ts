@@ -28,6 +28,12 @@ import {
   updateQuotaTypeSchema,
   insertQuotaAssignmentSchema,
   updateQuotaAssignmentSchema,
+  insertMeetingSchema,
+  updateMeetingSchema,
+  insertMeetingAgendaItemSchema,
+  updateMeetingAgendaItemSchema,
+  insertMeetingAttendanceSchema,
+  updateMeetingAttendanceSchema,
   insertPropertyCompanySchema,
   insertCommunitySchema,
   insertUserSchema,
@@ -903,6 +909,295 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting quota assignment:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // ===== Meetings Endpoints =====
+  
+  // Get all meetings for a community
+  app.get("/api/meetings", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const communityId = getCommunityId(req);
+      const meetings = await storage.getMeetings(communityId);
+      res.json(meetings);
+    } catch (error) {
+      console.error("Error fetching meetings:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Get a single meeting
+  app.get("/api/meetings/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const communityId = getCommunityId(req);
+      const meeting = await storage.getMeeting(req.params.id, communityId);
+      if (!meeting) {
+        return res.status(404).json({ error: "Meeting not found" });
+      }
+      res.json(meeting);
+    } catch (error) {
+      console.error("Error fetching meeting:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Create a new meeting
+  app.post("/api/meetings", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const currentUser = req.user as User;
+      const defaultCommunityId = getCommunityId(req);
+      
+      let communityId = defaultCommunityId;
+      
+      // If admin_fincas submits a specific communityId, validate it belongs to their property company
+      if (currentUser.role === "admin_fincas" && req.body.communityId) {
+        const requestedCommunity = await storage.getCommunity(req.body.communityId);
+        
+        // Verify the community exists and belongs to the admin's property company
+        if (!requestedCommunity || requestedCommunity.propertyCompanyId !== currentUser.propertyCompanyId) {
+          return res.status(404).json({ error: "Community not found or not accessible" });
+        }
+        
+        communityId = req.body.communityId;
+      }
+      
+      const data = insertMeetingSchema.parse({ 
+        ...req.body, 
+        communityId,
+        createdBy: currentUser.id
+      });
+      const meeting = await storage.createMeeting(data);
+      res.status(201).json(meeting);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation error", details: error.errors });
+      }
+      console.error("Error creating meeting:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Update a meeting
+  app.patch("/api/meetings/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const communityId = getCommunityId(req);
+      const data = updateMeetingSchema.parse(req.body);
+      const meeting = await storage.updateMeeting(req.params.id, communityId, data);
+      if (!meeting) {
+        return res.status(404).json({ error: "Meeting not found" });
+      }
+      res.json(meeting);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation error", details: error.errors });
+      }
+      console.error("Error updating meeting:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Delete a meeting
+  app.delete("/api/meetings/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const communityId = getCommunityId(req);
+      const deleted = await storage.deleteMeeting(req.params.id, communityId);
+      if (!deleted) {
+        return res.status(404).json({ error: "Meeting not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting meeting:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // ===== Meeting Agenda Items Endpoints =====
+  
+  // Get all agenda items for a meeting
+  app.get("/api/meetings/:meetingId/agenda-items", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const communityId = getCommunityId(req);
+      // Verify the meeting belongs to the user's community
+      const meeting = await storage.getMeeting(req.params.meetingId, communityId);
+      if (!meeting) {
+        return res.status(404).json({ error: "Meeting not found" });
+      }
+      
+      const agendaItems = await storage.getMeetingAgendaItems(req.params.meetingId);
+      res.json(agendaItems);
+    } catch (error) {
+      console.error("Error fetching agenda items:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Create a new agenda item
+  app.post("/api/meetings/:meetingId/agenda-items", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const communityId = getCommunityId(req);
+      // Verify the meeting belongs to the user's community
+      const meeting = await storage.getMeeting(req.params.meetingId, communityId);
+      if (!meeting) {
+        return res.status(404).json({ error: "Meeting not found" });
+      }
+      
+      const data = insertMeetingAgendaItemSchema.parse({
+        ...req.body,
+        meetingId: req.params.meetingId
+      });
+      const agendaItem = await storage.createMeetingAgendaItem(data);
+      res.status(201).json(agendaItem);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation error", details: error.errors });
+      }
+      console.error("Error creating agenda item:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Update an agenda item
+  app.patch("/api/meetings/:meetingId/agenda-items/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const communityId = getCommunityId(req);
+      // Verify the meeting belongs to the user's community
+      const meeting = await storage.getMeeting(req.params.meetingId, communityId);
+      if (!meeting) {
+        return res.status(404).json({ error: "Meeting not found" });
+      }
+      
+      const data = updateMeetingAgendaItemSchema.parse(req.body);
+      const agendaItem = await storage.updateMeetingAgendaItem(
+        req.params.id, 
+        req.params.meetingId, 
+        data
+      );
+      if (!agendaItem) {
+        return res.status(404).json({ error: "Agenda item not found" });
+      }
+      res.json(agendaItem);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation error", details: error.errors });
+      }
+      console.error("Error updating agenda item:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Delete an agenda item
+  app.delete("/api/meetings/:meetingId/agenda-items/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const communityId = getCommunityId(req);
+      // Verify the meeting belongs to the user's community
+      const meeting = await storage.getMeeting(req.params.meetingId, communityId);
+      if (!meeting) {
+        return res.status(404).json({ error: "Meeting not found" });
+      }
+      
+      const deleted = await storage.deleteMeetingAgendaItem(req.params.id, req.params.meetingId);
+      if (!deleted) {
+        return res.status(404).json({ error: "Agenda item not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting agenda item:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // ===== Meeting Attendances Endpoints =====
+  
+  // Get all attendances for a meeting
+  app.get("/api/meetings/:meetingId/attendances", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const communityId = getCommunityId(req);
+      // Verify the meeting belongs to the user's community
+      const meeting = await storage.getMeeting(req.params.meetingId, communityId);
+      if (!meeting) {
+        return res.status(404).json({ error: "Meeting not found" });
+      }
+      
+      const attendances = await storage.getMeetingAttendances(req.params.meetingId);
+      res.json(attendances);
+    } catch (error) {
+      console.error("Error fetching attendances:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Create a new attendance record
+  app.post("/api/meetings/:meetingId/attendances", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const communityId = getCommunityId(req);
+      // Verify the meeting belongs to the user's community
+      const meeting = await storage.getMeeting(req.params.meetingId, communityId);
+      if (!meeting) {
+        return res.status(404).json({ error: "Meeting not found" });
+      }
+      
+      const data = insertMeetingAttendanceSchema.parse({
+        ...req.body,
+        meetingId: req.params.meetingId
+      });
+      const attendance = await storage.createMeetingAttendance(data);
+      res.status(201).json(attendance);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation error", details: error.errors });
+      }
+      console.error("Error creating attendance:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Update an attendance record
+  app.patch("/api/meetings/:meetingId/attendances/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const communityId = getCommunityId(req);
+      // Verify the meeting belongs to the user's community
+      const meeting = await storage.getMeeting(req.params.meetingId, communityId);
+      if (!meeting) {
+        return res.status(404).json({ error: "Meeting not found" });
+      }
+      
+      const data = updateMeetingAttendanceSchema.parse(req.body);
+      const attendance = await storage.updateMeetingAttendance(
+        req.params.id, 
+        req.params.meetingId, 
+        data
+      );
+      if (!attendance) {
+        return res.status(404).json({ error: "Attendance record not found" });
+      }
+      res.json(attendance);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation error", details: error.errors });
+      }
+      console.error("Error updating attendance:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Delete an attendance record
+  app.delete("/api/meetings/:meetingId/attendances/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const communityId = getCommunityId(req);
+      // Verify the meeting belongs to the user's community
+      const meeting = await storage.getMeeting(req.params.meetingId, communityId);
+      if (!meeting) {
+        return res.status(404).json({ error: "Meeting not found" });
+      }
+      
+      const deleted = await storage.deleteMeetingAttendance(req.params.id, req.params.meetingId);
+      if (!deleted) {
+        return res.status(404).json({ error: "Attendance record not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting attendance:", error);
       res.status(500).json({ error: "Internal server error" });
     }
   });

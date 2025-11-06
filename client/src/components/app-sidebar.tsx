@@ -8,6 +8,7 @@ import {
   Euro,
   LayoutDashboard,
   Settings,
+  CalendarDays,
 } from "lucide-react";
 import {
   Sidebar,
@@ -59,6 +60,11 @@ const menuItems = [
     title: "Cuotas",
     url: "/cuotas",
     icon: Euro,
+  },
+  {
+    title: "Juntas",
+    url: "/juntas",
+    icon: CalendarDays,
   },
 ];
 

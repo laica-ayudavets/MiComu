@@ -227,7 +227,12 @@ export type Provider = typeof providers.$inferSelect;
 
 // Quota system enums
 export const quotaFrequencyEnum = pgEnum("quota_frequency", ["mensual", "trimestral", "semestral", "anual", "unica"]);
-export const quotaPaymentStatusEnum = pgEnum("quota_payment_status", ["pendiente", "pagada", "deudor"]);
+export const quotaPaymentStatusEnum = pgEnum("quota_payment_status", ["pendiente", "pagada", "vencida"]);
+
+// Meeting enums
+export const meetingTypeEnum = pgEnum("meeting_type", ["ordinaria", "extraordinaria"]);
+export const meetingStatusEnum = pgEnum("meeting_status", ["convocada", "celebrada", "cancelada"]);
+export const attendanceTypeEnum = pgEnum("attendance_type", ["asistente", "representado", "ausente"]);
 
 // Quota Types - Define types of quotas for a community (up to 10)
 export const quotaTypes = pgTable("quota_types", {
@@ -278,3 +283,78 @@ export const updateQuotaAssignmentSchema = insertQuotaAssignmentSchema.partial()
 export type InsertQuotaAssignment = z.infer<typeof insertQuotaAssignmentSchema>;
 export type UpdateQuotaAssignment = z.infer<typeof updateQuotaAssignmentSchema>;
 export type QuotaAssignment = typeof quotaAssignments.$inferSelect;
+
+// Meetings (Juntas)
+export const meetings = pgTable("meetings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  communityId: varchar("community_id").notNull().references(() => communities.id, { onDelete: "cascade" }),
+  type: meetingTypeEnum("type").notNull().default("ordinaria"),
+  title: text("title").notNull(),
+  description: text("description"),
+  scheduledDate: timestamp("scheduled_date").notNull(),
+  location: text("location").notNull(),
+  status: meetingStatusEnum("status").notNull().default("convocada"),
+  minutesContent: text("minutes_content"), // Acta content
+  minutesApproved: boolean("minutes_approved").default(false),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertMeetingSchema = createInsertSchema(meetings, {
+  scheduledDate: z.coerce.date(),
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const updateMeetingSchema = insertMeetingSchema.partial().omit({
+  communityId: true,
+});
+export type InsertMeeting = z.infer<typeof insertMeetingSchema>;
+export type UpdateMeeting = z.infer<typeof updateMeetingSchema>;
+export type Meeting = typeof meetings.$inferSelect;
+
+// Meeting Agenda Items (Puntos del orden del día)
+export const meetingAgendaItems = pgTable("meeting_agenda_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  meetingId: varchar("meeting_id").notNull().references(() => meetings.id, { onDelete: "cascade" }),
+  orderIndex: integer("order_index").notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertMeetingAgendaItemSchema = createInsertSchema(meetingAgendaItems).omit({
+  id: true,
+  createdAt: true,
+});
+export const updateMeetingAgendaItemSchema = insertMeetingAgendaItemSchema.partial().omit({
+  meetingId: true,
+});
+export type InsertMeetingAgendaItem = z.infer<typeof insertMeetingAgendaItemSchema>;
+export type UpdateMeetingAgendaItem = z.infer<typeof updateMeetingAgendaItemSchema>;
+export type MeetingAgendaItem = typeof meetingAgendaItems.$inferSelect;
+
+// Meeting Attendances (Registro de asistentes)
+export const meetingAttendances = pgTable("meeting_attendances", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  meetingId: varchar("meeting_id").notNull().references(() => meetings.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  attendanceType: attendanceTypeEnum("attendance_type").notNull().default("ausente"),
+  representedBy: varchar("represented_by").references(() => users.id), // If representado, who represents them
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertMeetingAttendanceSchema = createInsertSchema(meetingAttendances).omit({
+  id: true,
+  createdAt: true,
+});
+export const updateMeetingAttendanceSchema = insertMeetingAttendanceSchema.partial().omit({
+  meetingId: true,
+  userId: true,
+});
+export type InsertMeetingAttendance = z.infer<typeof insertMeetingAttendanceSchema>;
+export type UpdateMeetingAttendance = z.infer<typeof updateMeetingAttendanceSchema>;
+export type MeetingAttendance = typeof meetingAttendances.$inferSelect;

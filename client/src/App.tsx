@@ -20,6 +20,7 @@ import Acuerdos from "@/pages/acuerdos";
 import Derramas from "@/pages/derramas";
 import Proveedores from "@/pages/proveedores";
 import Cuotas from "@/pages/cuotas";
+import Juntas from "@/pages/juntas";
 import Configuracion from "@/pages/configuracion";
 
 function AppLayout({ children }: { children: React.ReactNode }) {
@@ -105,6 +106,11 @@ function Router() {
       <Route path="/cuotas">
         <AppLayout>
           <Cuotas />
+        </AppLayout>
+      </Route>
+      <Route path="/juntas">
+        <AppLayout>
+          <Juntas />
         </AppLayout>
       </Route>
       <Route path="/configuracion">

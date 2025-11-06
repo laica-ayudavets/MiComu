@@ -22,6 +22,12 @@ import {
   type InsertQuotaType,
   type QuotaAssignment,
   type InsertQuotaAssignment,
+  type Meeting,
+  type InsertMeeting,
+  type MeetingAgendaItem,
+  type InsertMeetingAgendaItem,
+  type MeetingAttendance,
+  type InsertMeetingAttendance,
   users,
   propertyCompanies,
   communities,
@@ -32,7 +38,10 @@ import {
   derramaPayments,
   providers,
   quotaTypes,
-  quotaAssignments
+  quotaAssignments,
+  meetings,
+  meetingAgendaItems,
+  meetingAttendances
 } from "@shared/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 
@@ -110,6 +119,27 @@ export interface IStorage {
   createQuotaAssignment(assignment: InsertQuotaAssignment): Promise<QuotaAssignment>;
   updateQuotaAssignment(id: string, communityId: string, updates: Partial<InsertQuotaAssignment>): Promise<QuotaAssignment | undefined>;
   deleteQuotaAssignment(id: string, communityId: string): Promise<boolean>;
+  
+  // Meeting management (community-scoped)
+  getMeetings(communityId: string): Promise<Meeting[]>;
+  getMeeting(id: string, communityId: string): Promise<Meeting | undefined>;
+  createMeeting(meeting: InsertMeeting): Promise<Meeting>;
+  updateMeeting(id: string, communityId: string, updates: Partial<InsertMeeting>): Promise<Meeting | undefined>;
+  deleteMeeting(id: string, communityId: string): Promise<boolean>;
+  
+  // Meeting Agenda Item management
+  getMeetingAgendaItems(meetingId: string): Promise<MeetingAgendaItem[]>;
+  getMeetingAgendaItem(id: string, meetingId: string): Promise<MeetingAgendaItem | undefined>;
+  createMeetingAgendaItem(item: InsertMeetingAgendaItem): Promise<MeetingAgendaItem>;
+  updateMeetingAgendaItem(id: string, meetingId: string, updates: Partial<InsertMeetingAgendaItem>): Promise<MeetingAgendaItem | undefined>;
+  deleteMeetingAgendaItem(id: string, meetingId: string): Promise<boolean>;
+  
+  // Meeting Attendance management
+  getMeetingAttendances(meetingId: string): Promise<MeetingAttendance[]>;
+  getMeetingAttendance(id: string, meetingId: string): Promise<MeetingAttendance | undefined>;
+  createMeetingAttendance(attendance: InsertMeetingAttendance): Promise<MeetingAttendance>;
+  updateMeetingAttendance(id: string, meetingId: string, updates: Partial<InsertMeetingAttendance>): Promise<MeetingAttendance | undefined>;
+  deleteMeetingAttendance(id: string, meetingId: string): Promise<boolean>;
   
   // Dashboard stats (community-scoped)
   getDashboardStats(communityId: string): Promise<{
@@ -469,6 +499,105 @@ export class DbStorage implements IStorage {
   async deleteQuotaAssignment(id: string, communityId: string): Promise<boolean> {
     const result = await db.delete(quotaAssignments)
       .where(and(eq(quotaAssignments.id, id), eq(quotaAssignments.communityId, communityId)));
+    return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  // Meeting methods (community-scoped)
+  async getMeetings(communityId: string): Promise<Meeting[]> {
+    return db.select().from(meetings)
+      .where(eq(meetings.communityId, communityId))
+      .orderBy(desc(meetings.scheduledDate));
+  }
+
+  async getMeeting(id: string, communityId: string): Promise<Meeting | undefined> {
+    const result = await db.select().from(meetings)
+      .where(and(eq(meetings.id, id), eq(meetings.communityId, communityId)))
+      .limit(1);
+    return result[0];
+  }
+
+  async createMeeting(meeting: InsertMeeting): Promise<Meeting> {
+    const result = await db.insert(meetings).values(meeting).returning();
+    return result[0];
+  }
+
+  async updateMeeting(id: string, communityId: string, updates: Partial<InsertMeeting>): Promise<Meeting | undefined> {
+    const result = await db.update(meetings)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(and(eq(meetings.id, id), eq(meetings.communityId, communityId)))
+      .returning();
+    return result[0];
+  }
+
+  async deleteMeeting(id: string, communityId: string): Promise<boolean> {
+    const result = await db.delete(meetings)
+      .where(and(eq(meetings.id, id), eq(meetings.communityId, communityId)));
+    return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  // Meeting Agenda Item methods
+  async getMeetingAgendaItems(meetingId: string): Promise<MeetingAgendaItem[]> {
+    return db.select().from(meetingAgendaItems)
+      .where(eq(meetingAgendaItems.meetingId, meetingId))
+      .orderBy(meetingAgendaItems.orderIndex);
+  }
+
+  async getMeetingAgendaItem(id: string, meetingId: string): Promise<MeetingAgendaItem | undefined> {
+    const result = await db.select().from(meetingAgendaItems)
+      .where(and(eq(meetingAgendaItems.id, id), eq(meetingAgendaItems.meetingId, meetingId)))
+      .limit(1);
+    return result[0];
+  }
+
+  async createMeetingAgendaItem(item: InsertMeetingAgendaItem): Promise<MeetingAgendaItem> {
+    const result = await db.insert(meetingAgendaItems).values(item).returning();
+    return result[0];
+  }
+
+  async updateMeetingAgendaItem(id: string, meetingId: string, updates: Partial<InsertMeetingAgendaItem>): Promise<MeetingAgendaItem | undefined> {
+    const result = await db.update(meetingAgendaItems)
+      .set(updates)
+      .where(and(eq(meetingAgendaItems.id, id), eq(meetingAgendaItems.meetingId, meetingId)))
+      .returning();
+    return result[0];
+  }
+
+  async deleteMeetingAgendaItem(id: string, meetingId: string): Promise<boolean> {
+    const result = await db.delete(meetingAgendaItems)
+      .where(and(eq(meetingAgendaItems.id, id), eq(meetingAgendaItems.meetingId, meetingId)));
+    return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  // Meeting Attendance methods
+  async getMeetingAttendances(meetingId: string): Promise<MeetingAttendance[]> {
+    return db.select().from(meetingAttendances)
+      .where(eq(meetingAttendances.meetingId, meetingId))
+      .orderBy(meetingAttendances.createdAt);
+  }
+
+  async getMeetingAttendance(id: string, meetingId: string): Promise<MeetingAttendance | undefined> {
+    const result = await db.select().from(meetingAttendances)
+      .where(and(eq(meetingAttendances.id, id), eq(meetingAttendances.meetingId, meetingId)))
+      .limit(1);
+    return result[0];
+  }
+
+  async createMeetingAttendance(attendance: InsertMeetingAttendance): Promise<MeetingAttendance> {
+    const result = await db.insert(meetingAttendances).values(attendance).returning();
+    return result[0];
+  }
+
+  async updateMeetingAttendance(id: string, meetingId: string, updates: Partial<InsertMeetingAttendance>): Promise<MeetingAttendance | undefined> {
+    const result = await db.update(meetingAttendances)
+      .set(updates)
+      .where(and(eq(meetingAttendances.id, id), eq(meetingAttendances.meetingId, meetingId)))
+      .returning();
+    return result[0];
+  }
+
+  async deleteMeetingAttendance(id: string, meetingId: string): Promise<boolean> {
+    const result = await db.delete(meetingAttendances)
+      .where(and(eq(meetingAttendances.id, id), eq(meetingAttendances.meetingId, meetingId)));
     return result.rowCount !== null && result.rowCount > 0;
   }
 

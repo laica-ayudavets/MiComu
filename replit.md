@@ -4,7 +4,7 @@ This is a SaaS multi-tenant community management platform designed for Spanish r
 
 The system is built as a full-stack TypeScript application with a modern React frontend, Express backend, and PostgreSQL database using Drizzle ORM. It follows a clean separation between client, server, and shared code with a focus on professional UI design inspired by Linear, Notion, and Stripe.
 
-## Current Status (Last Updated: November 5, 2025)
+## Current Status (Last Updated: November 6, 2025)
 
 **Completed Features:**
 - ✅ **3-Tier Hierarchy System**: Refactored from 2-level to 3-level architecture
@@ -13,9 +13,9 @@ The system is built as a full-stack TypeScript application with a modern React f
   - Users (Vecinos/Presidentes/Admin Fincas) - Bottom level
 - ✅ Complete PostgreSQL database schema with property_companies and communities tables
 - ✅ Updated role system: admin_fincas, presidente, vecino
-- ✅ Full CRUD REST API for all entities (incidents, documents, agreements, derramas, providers, quotas)
+- ✅ Full CRUD REST API for all entities (incidents, documents, agreements, derramas, providers, quotas, meetings)
 - ✅ Community-scoped data isolation (all data belongs to a community)
-- ✅ All 7 main pages connected to backend API with TanStack Query
+- ✅ All 8 main pages connected to backend API with TanStack Query
 - ✅ **Complete Security Hardening**: All business endpoints protected with requireAuth middleware
 - ✅ **Role-Based Access Control**: Admin_fincas can switch between communities, presidente/vecino limited to their assigned community
 - ✅ **Community Selector Component**: Fully functional selector in header for admin_fincas with session persistence
@@ -28,6 +28,17 @@ The system is built as a full-stack TypeScript application with a modern React f
   - Full CRUD operations with validation and error handling
   - Backend data transformation to handle frontend/database type mismatches
   - E2E tested and verified working
+- ✅ **Meetings Management System** (Juntas de Vecinos): Complete module for managing community meetings
+  - Meeting types: ordinaria (ordinary) and extraordinaria (extraordinary)
+  - Meeting statuses: convocada (called), celebrada (held), cancelada (cancelled)
+  - Comprehensive listing page with filters (date range, type, status, community for admin_fincas)
+  - Create meeting with title, type, description, date/time, location
+  - Full CRUD API endpoints for meetings, agenda items, and attendances
+  - Database schema: meetings, meeting_agenda_items, meeting_attendances tables
+  - Admin_fincas community selection pattern implemented in creation form
+  - Integration with sidebar navigation (CalendarDays icon)
+  - **Security hardening**: POST /api/meetings validates communityId belongs to admin's property company
+  - **Multi-tenant isolation**: All agenda/attendance endpoints verify meeting ownership before operations
 - ✅ Professional UI with purple/orange glassmorphism design
 - ✅ Form validation with Zod and react-hook-form
 - ✅ Toast notifications for user feedback
@@ -42,7 +53,7 @@ The system is built as a full-stack TypeScript application with a modern React f
 
 **UX Improvements (November 6, 2025):**
 - ✅ **Admin_fincas Community Selection Pattern**: When creating entities, admin_fincas users must explicitly select a community as the first field in the form
-  - **Implemented in**: Incidencias, Acuerdos, Derramas
+  - **Implemented in**: Incidencias, Acuerdos, Derramas, Juntas
   - **Pending**: Documentos, Proveedores, Cuotas
   - Community field marked with asterisk (*) indicating it's required
   - Non-admin users (presidente, vecino) continue using their assigned community automatically
@@ -52,7 +63,16 @@ The system is built as a full-stack TypeScript application with a modern React f
   - Updated grid layout to accommodate 6 stat cards (3 columns)
   - Visual indicators with appropriate icons (Receipt for derramas, AlertTriangle for unpaid quotas)
 
-**Recent Updates (November 5, 2025):**
+**Recent Updates (November 6, 2025):**
+- ✅ **Juntas (Meetings) Module Complete**: Full implementation of community meetings management
+  - Database schema with meetings, meeting_agenda_items, meeting_attendances tables
+  - Meeting types (ordinaria/extraordinaria) and statuses (convocada/celebrada/cancelada)
+  - Frontend page at /juntas with listing, filters, and creation dialog
+  - Admin_fincas community selection pattern implemented
+  - Security hardening: communityId validation for admin_fincas, meeting ownership checks
+  - E2E tested and verified working
+
+**Previous Updates (November 5, 2025):**
 - ✅ **Login Page**: Full authentication UI with email/password form, Zod validation, and automatic redirect
 - ✅ **Protected Routes**: Automatic redirection to login for unauthenticated users
 - ✅ **Comunidades Menu Item for Admin_fincas**: 
