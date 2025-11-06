@@ -21,6 +21,7 @@ import Derramas from "@/pages/derramas";
 import Proveedores from "@/pages/proveedores";
 import Cuotas from "@/pages/cuotas";
 import Juntas from "@/pages/juntas";
+import JuntaDetail from "@/pages/junta-detail";
 import Configuracion from "@/pages/configuracion";
 
 function AppLayout({ children }: { children: React.ReactNode }) {
@@ -111,6 +112,11 @@ function Router() {
       <Route path="/juntas">
         <AppLayout>
           <Juntas />
+        </AppLayout>
+      </Route>
+      <Route path="/juntas/:id">
+        <AppLayout>
+          <JuntaDetail />
         </AppLayout>
       </Route>
       <Route path="/configuracion">
