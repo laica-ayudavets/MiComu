@@ -31,14 +31,24 @@ The system is built as a full-stack TypeScript application with a modern React f
 - ✅ **Meetings Management System** (Juntas de Vecinos): Complete module for managing community meetings
   - Meeting types: ordinaria (ordinary) and extraordinaria (extraordinary)
   - Meeting statuses: convocada (called), celebrada (held), cancelada (cancelled)
-  - Comprehensive listing page with filters (date range, type, status, community for admin_fincas)
-  - Create meeting with title, type, description, date/time, location
+  - **Listing Page** (/juntas):
+    - Comprehensive filters (date range, type, status, community for admin_fincas)
+    - Create meeting dialog with form validation
+    - Clickable meeting cards with key information
+    - Admin_fincas community selection pattern
+  - **Detail Page** (/juntas/:id):
+    - Complete meeting information display (title, type, status, date, location, description)
+    - **Agenda Items Management**: Create, edit, delete agenda points with title and description. Items numbered and ordered
+    - **Attendance Management**: Register user attendance with types (asistente/representado/ausente). Full CRUD operations
+    - **Meeting Minutes Editor**: View/edit meeting minutes with save/cancel functionality. Content persists correctly
+    - Back navigation to meetings list
+    - All sections with empty states and loading states
   - Full CRUD API endpoints for meetings, agenda items, and attendances
   - Database schema: meetings, meeting_agenda_items, meeting_attendances tables
-  - Admin_fincas community selection pattern implemented in creation form
   - Integration with sidebar navigation (CalendarDays icon)
   - **Security hardening**: POST /api/meetings validates communityId belongs to admin's property company
   - **Multi-tenant isolation**: All agenda/attendance endpoints verify meeting ownership before operations
+  - **E2E tested**: Complete workflow verified (create meeting, add agenda items, register attendances, edit minutes)
 - ✅ Professional UI with purple/orange glassmorphism design
 - ✅ Form validation with Zod and react-hook-form
 - ✅ Toast notifications for user feedback
