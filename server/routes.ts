@@ -5,6 +5,7 @@ import { storage } from "./storage";
 import { db } from "./db";
 import { 
   hashPassword,
+  verifyPassword,
   getUserContext,
   getCommunityIdFromUser,
   setSelectedCommunity,
@@ -63,9 +64,11 @@ async function ensureDefaultData() {
     }
   }
 
-  // Create community
+  // Create communities
   const communities = await storage.getCommunities(propertyCompany!.id);
   let community;
+  let community2;
+  
   if (communities.length === 0) {
     try {
       community = await storage.createCommunity({
@@ -78,12 +81,114 @@ async function ensureDefaultData() {
         totalUnits: 48,
         presidentId: null,
       });
+      
+      community2 = await storage.createCommunity({
+        propertyCompanyId: propertyCompany!.id,
+        name: "Comunidad Los Pinos",
+        address: "Avenida de la Constitución 45",
+        postalCode: "28002",
+        city: "Madrid",
+        province: "Madrid",
+        totalUnits: 36,
+        presidentId: null,
+      });
     } catch (error) {
       const communities = await storage.getCommunities(propertyCompany!.id);
       community = communities[0];
+      community2 = communities[1];
     }
   } else {
     community = communities[0];
+    community2 = communities[1] || community;
+  }
+
+  // Create test users if they don't exist, or update passwords if needed
+  const adminEmail = "admin@gestiona.com";
+  const presidenteEmail = "presidente@lasflores.com";
+  const vecinoEmail = "vecino@lasflores.com";
+  
+  let adminUser = await storage.getUserByEmail(adminEmail);
+  if (!adminUser) {
+    try {
+      const passwordHash = await hashPassword("password");
+      adminUser = await storage.createUser({
+        email: adminEmail,
+        username: "admin",
+        password: passwordHash,
+        fullName: "Administrador de Fincas",
+        role: "admin_fincas",
+        propertyCompanyId: propertyCompany!.id,
+        communityId: null,
+        unitNumber: null,
+      });
+      console.log("✅ Created admin user: admin@gestiona.com");
+    } catch (error) {
+      console.error("Error creating admin user:", error);
+    }
+  } else {
+    // Verify password and update if needed
+    const isPasswordValid = await verifyPassword("password", adminUser.password);
+    if (!isPasswordValid) {
+      const passwordHash = await hashPassword("password");
+      await storage.updateUserPassword(adminUser.id, passwordHash);
+      console.log("✅ Updated password for admin user: admin@gestiona.com");
+    }
+  }
+  
+  let presidenteUser = await storage.getUserByEmail(presidenteEmail);
+  if (!presidenteUser) {
+    try {
+      const passwordHash = await hashPassword("password");
+      presidenteUser = await storage.createUser({
+        email: presidenteEmail,
+        username: "presidente",
+        password: passwordHash,
+        fullName: "Presidente de la Comunidad",
+        role: "presidente",
+        propertyCompanyId: null,
+        communityId: community!.id,
+        unitNumber: "1A",
+      });
+      console.log("✅ Created presidente user: presidente@lasflores.com");
+    } catch (error) {
+      console.error("Error creating presidente user:", error);
+    }
+  } else {
+    // Verify password and update if needed
+    const isPasswordValid = await verifyPassword("password", presidenteUser.password);
+    if (!isPasswordValid) {
+      const passwordHash = await hashPassword("password");
+      await storage.updateUserPassword(presidenteUser.id, passwordHash);
+      console.log("✅ Updated password for presidente user: presidente@lasflores.com");
+    }
+  }
+  
+  let vecinoUser = await storage.getUserByEmail(vecinoEmail);
+  if (!vecinoUser) {
+    try {
+      const passwordHash = await hashPassword("password");
+      vecinoUser = await storage.createUser({
+        email: vecinoEmail,
+        username: "vecino",
+        password: passwordHash,
+        fullName: "Vecino de la Comunidad",
+        role: "vecino",
+        propertyCompanyId: null,
+        communityId: community!.id,
+        unitNumber: "2B",
+      });
+      console.log("✅ Created vecino user: vecino@lasflores.com");
+    } catch (error) {
+      console.error("Error creating vecino user:", error);
+    }
+  } else {
+    // Verify password and update if needed
+    const isPasswordValid = await verifyPassword("password", vecinoUser.password);
+    if (!isPasswordValid) {
+      const passwordHash = await hashPassword("password");
+      await storage.updateUserPassword(vecinoUser.id, passwordHash);
+      console.log("✅ Updated password for vecino user: vecino@lasflores.com");
+    }
   }
 
   return { propertyCompany, community };

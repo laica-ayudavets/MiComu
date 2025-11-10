@@ -51,6 +51,7 @@ export interface IStorage {
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateUserPassword(id: string, passwordHash: string): Promise<void>;
   
   // Property Company management
   getPropertyCompany(id: string): Promise<PropertyCompany | undefined>;
@@ -176,6 +177,12 @@ export class DbStorage implements IStorage {
   async createUser(user: InsertUser): Promise<User> {
     const result = await db.insert(users).values(user).returning();
     return result[0];
+  }
+
+  async updateUserPassword(id: string, passwordHash: string): Promise<void> {
+    await db.update(users)
+      .set({ password: passwordHash })
+      .where(eq(users.id, id));
   }
 
   // Property Company methods

@@ -54,6 +54,14 @@ The system is built as a full-stack TypeScript application with a modern React f
 - ✅ Toast notifications for user feedback
 - ✅ Loading states and error handling throughout
 
+**Bug Fixes (November 10, 2025):**
+- 🐛 **Fixed Authentication for Test Users**: Resolved login issue where test user passwords were not properly hashed
+  - Added `updateUserPassword` method to storage layer
+  - Modified `ensureDefaultData()` to verify and update test user passwords on server startup
+  - Now automatically detects invalid password hashes and regenerates them using scrypt
+  - All test accounts (admin@gestiona.com, presidente@lasflores.com, vecino@lasflores.com) working correctly
+  - E2E tested and verified: login flow works from browser
+
 **Bug Fixes (November 5, 2025):**
 - 🐛 **Fixed All Entity Creation**: Corrected ALL modules (Incidencias, Documentos, Acuerdos, Derramas, Proveedores) to use `communityId` instead of deprecated `tenantId`
   - All entities now properly link to a specific community
