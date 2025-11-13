@@ -98,3 +98,14 @@ The platform includes pre-configured test users for all roles (created via `ensu
 | Vecino | vecino@lasflores.com | password | Single community access, resident features |
 
 **Password Auto-Repair**: The system automatically updates passwords on startup if they don't match the configured values (via scrypt hash verification).
+
+## Login & Navigation
+
+**Login Flow:**
+- Login page (`client/src/pages/login.tsx`) displays test credentials for all roles including superadmin
+- After successful authentication, users are immediately redirected to their role-specific landing page:
+  - Superadmin → `/superadmin`
+  - Admin Fincas/Presidente/Vecino → `/` (community dashboard)
+- The login response is parsed (`await res.json()`) and used for immediate redirect via `getRoleLandingPath(user)`
+- Auth cache is invalidated after login to ensure fresh user data
+- Fallback useEffect provides additional redirect safety if immediate redirect fails

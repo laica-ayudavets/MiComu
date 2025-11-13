@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
-import { useUser } from "@/hooks/use-auth";
+import { useUser, type User } from "@/hooks/use-auth";
 import { getRoleLandingPath } from "@/lib/role-helpers";
 
 const loginSchema = z.object({
@@ -45,17 +45,20 @@ export default function Login() {
   const onSubmit = async (data: LoginFormValues) => {
     setIsLoading(true);
     try {
-      await apiRequest("POST", "/api/auth/login", data);
+      const res = await apiRequest("POST", "/api/auth/login", data);
+      const user = (await res.json()) as User;
 
-      // Invalidate all queries to refetch with authenticated context
-      queryClient.invalidateQueries();
+      // Invalidate auth queries to refetch with authenticated context
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
 
       toast({
         title: "Inicio de sesión exitoso",
         description: "Bienvenido a Administra mi comunidad",
       });
 
-      // Don't redirect here - let the useEffect handle it once user data loads
+      // Redirect immediately based on user role
+      const landingPath = getRoleLandingPath(user);
+      setLocation(landingPath);
     } catch (error: any) {
       toast({
         variant: "destructive",
