@@ -64,8 +64,8 @@ interface AdminUser {
 // Override propertyCompanyId to provide better validation error messages
 const adminFormSchema = createAdminWithPasswordSchema.omit({ role: true }).extend({
   propertyCompanyId: z.string()
-    .min(1, "Property company is required")
-    .uuid("Invalid property company selection"),
+    .min(1, "La empresa de gestión es obligatoria")
+    .uuid("Selección de empresa inválida"),
 });
 
 const editAdminSchema = z.object({
@@ -77,7 +77,7 @@ const editAdminSchema = z.object({
 });
 
 const changePasswordSchema = z.object({
-  newPassword: z.string().min(6, "Password must be at least 6 characters"),
+  newPassword: z.string().min(6, "La contraseña debe tener al menos 6 caracteres"),
 });
 
 type AdminFormData = z.infer<typeof adminFormSchema>;
@@ -132,8 +132,8 @@ export default function SuperadminAdmins() {
       queryClient.invalidateQueries({ queryKey: ["/api/superadmin/admins"] });
       queryClient.invalidateQueries({ queryKey: ["/api/superadmin/stats"] });
       toast({
-        title: "Admin created",
-        description: "Administrator account has been created successfully",
+        title: "Administrador creado",
+        description: "La cuenta de administrador se ha creado correctamente",
       });
       setDialogOpen(false);
       setShowPassword(false);
@@ -156,8 +156,8 @@ export default function SuperadminAdmins() {
       queryClient.invalidateQueries({ queryKey: ["/api/superadmin/admins"] });
       queryClient.invalidateQueries({ queryKey: ["/api/superadmin/stats"] });
       toast({
-        title: "Admin updated",
-        description: "Administrator account has been updated successfully",
+        title: "Administrador actualizado",
+        description: "La cuenta de administrador se ha actualizado correctamente",
       });
       setDialogOpen(false);
       setShowPassword(false);
@@ -179,8 +179,8 @@ export default function SuperadminAdmins() {
     },
     onSuccess: () => {
       toast({
-        title: "Password changed",
-        description: "Administrator password has been changed successfully",
+        title: "Contraseña cambiada",
+        description: "La contraseña del administrador se ha cambiado correctamente",
       });
       setPasswordDialogOpen(false);
       setSelectedAdmin(null);
@@ -254,7 +254,7 @@ export default function SuperadminAdmins() {
   const getCompanyName = (companyId: string | null) => {
     if (!companyId) return "—";
     const company = companies.find((c) => c.id === companyId);
-    return company?.name || "Unknown";
+    return company?.name || "Desconocida";
   };
 
   const isLoading = adminsLoading || companiesLoading;
@@ -263,37 +263,37 @@ export default function SuperadminAdmins() {
     <div className="p-6 space-y-6 bg-gradient-to-br from-background via-primary/[0.02] to-accent/[0.02] min-h-full" data-testid="page-superadmin-admins">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Administrator Accounts</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Cuentas de Administrador</h1>
           <p className="text-muted-foreground mt-2">
-            Manage admin_fincas user accounts and their access
+            Gestiona las cuentas de administrador de fincas y sus accesos
           </p>
         </div>
         {companies.length === 0 ? (
           <div className="text-right">
-            <p className="text-sm text-muted-foreground mb-2">Create a property company first</p>
+            <p className="text-sm text-muted-foreground mb-2">Crea primero una empresa de gestión</p>
             <Button variant="outline" disabled data-testid="button-create-admin-disabled">
               <Plus className="w-4 h-4 mr-2" />
-              New Admin
+              Nuevo Administrador
             </Button>
           </div>
         ) : (
           <Button onClick={handleCreateNew} data-testid="button-create-admin">
             <Plus className="w-4 h-4 mr-2" />
-            New Admin
+            Nuevo Administrador
           </Button>
         )}
       </div>
 
       <Card className="border-0 shadow-md">
         <CardHeader>
-          <CardTitle>Administrators List</CardTitle>
-          <CardDescription>Search and manage all admin_fincas accounts</CardDescription>
+          <CardTitle>Lista de Administradores</CardTitle>
+          <CardDescription>Busca y gestiona todas las cuentas de administrador</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
-              placeholder="Search by username, email, or name..."
+              placeholder="Buscar por usuario, email o nombre..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
@@ -308,17 +308,17 @@ export default function SuperadminAdmins() {
           ) : filteredAdmins.length === 0 ? (
             <div className="text-center py-12">
               <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">No administrators found</p>
+              <p className="text-muted-foreground">No se encontraron administradores</p>
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
+                  <TableHead>Nombre</TableHead>
                   <TableHead>Email</TableHead>
-                  <TableHead>Company</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>Empresa</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -336,7 +336,7 @@ export default function SuperadminAdmins() {
                     </TableCell>
                     <TableCell>
                       <Badge variant={admin.active ? "default" : "secondary"} data-testid={`badge-status-${admin.id}`}>
-                        {admin.active ? "Active" : "Inactive"}
+                        {admin.active ? "Activo" : "Inactivo"}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right space-x-2">
@@ -381,12 +381,12 @@ export default function SuperadminAdmins() {
         <DialogContent data-testid="dialog-admin-form">
           <DialogHeader>
             <DialogTitle>
-              {editingAdmin ? "Edit Administrator" : "Create New Administrator"}
+              {editingAdmin ? "Editar Administrador" : "Crear Nuevo Administrador"}
             </DialogTitle>
             <DialogDescription>
               {editingAdmin
-                ? "Update the administrator account details"
-                : "Create a new admin_fincas user account"}
+                ? "Actualiza los detalles de la cuenta de administrador"
+                : "Crea una nueva cuenta de administrador de fincas"}
             </DialogDescription>
           </DialogHeader>
           {editingAdmin ? (
@@ -397,7 +397,7 @@ export default function SuperadminAdmins() {
                   name="username"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Username</FormLabel>
+                      <FormLabel>Nombre de usuario</FormLabel>
                       <FormControl>
                         <Input {...field} data-testid="input-admin-username" />
                       </FormControl>
@@ -423,7 +423,7 @@ export default function SuperadminAdmins() {
                   name="fullName"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Full Name</FormLabel>
+                      <FormLabel>Nombre completo</FormLabel>
                       <FormControl>
                         <Input {...field} data-testid="input-admin-fullname" />
                       </FormControl>
@@ -436,11 +436,11 @@ export default function SuperadminAdmins() {
                   name="propertyCompanyId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Property Company</FormLabel>
+                      <FormLabel>Empresa de Gestión</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger data-testid="select-company">
-                            <SelectValue placeholder="Select a company" />
+                            <SelectValue placeholder="Selecciona una empresa" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
@@ -466,14 +466,14 @@ export default function SuperadminAdmins() {
                     }}
                     data-testid="button-cancel"
                   >
-                    Cancel
+                    Cancelar
                   </Button>
                   <Button
                     type="submit"
                     disabled={updateMutation.isPending}
                     data-testid="button-save-admin"
                   >
-                    {updateMutation.isPending ? "Saving..." : "Save"}
+                    {updateMutation.isPending ? "Guardando..." : "Guardar"}
                   </Button>
                 </DialogFooter>
               </form>
@@ -486,7 +486,7 @@ export default function SuperadminAdmins() {
                   name="username"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Username *</FormLabel>
+                      <FormLabel>Nombre de usuario *</FormLabel>
                       <FormControl>
                         <Input {...field} data-testid="input-admin-username" />
                       </FormControl>
@@ -512,7 +512,7 @@ export default function SuperadminAdmins() {
                   name="fullName"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Full Name *</FormLabel>
+                      <FormLabel>Nombre completo *</FormLabel>
                       <FormControl>
                         <Input {...field} data-testid="input-admin-fullname" />
                       </FormControl>
@@ -525,7 +525,7 @@ export default function SuperadminAdmins() {
                   name="password"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Password *</FormLabel>
+                      <FormLabel>Contraseña *</FormLabel>
                       <FormControl>
                         <div className="relative">
                           <Input 
@@ -546,7 +546,7 @@ export default function SuperadminAdmins() {
                         </div>
                       </FormControl>
                       <FormDescription className="text-xs">
-                        Minimum 8 characters with uppercase, lowercase, and number
+                        Mínimo 8 caracteres con mayúsculas, minúsculas y números
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -557,14 +557,14 @@ export default function SuperadminAdmins() {
                   name="propertyCompanyId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Property Company *</FormLabel>
+                      <FormLabel>Empresa de Gestión *</FormLabel>
                       <Select 
                         onValueChange={(value) => field.onChange(value || undefined)} 
                         value={field.value ?? ""}
                       >
                         <FormControl>
                           <SelectTrigger data-testid="select-company">
-                            <SelectValue placeholder="Select a company" />
+                            <SelectValue placeholder="Selecciona una empresa" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
@@ -590,14 +590,14 @@ export default function SuperadminAdmins() {
                     }}
                     data-testid="button-cancel"
                   >
-                    Cancel
+                    Cancelar
                   </Button>
                   <Button
                     type="submit"
                     disabled={createMutation.isPending}
                     data-testid="button-save-admin"
                   >
-                    {createMutation.isPending ? "Creating..." : "Create"}
+                    {createMutation.isPending ? "Creando..." : "Crear"}
                   </Button>
                 </DialogFooter>
               </form>
@@ -609,9 +609,9 @@ export default function SuperadminAdmins() {
       <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
         <DialogContent data-testid="dialog-change-password">
           <DialogHeader>
-            <DialogTitle>Change Password</DialogTitle>
+            <DialogTitle>Cambiar Contraseña</DialogTitle>
             <DialogDescription>
-              Enter a new password for {selectedAdmin?.fullName}
+              Introduce una nueva contraseña para {selectedAdmin?.fullName}
             </DialogDescription>
           </DialogHeader>
           <Form {...passwordForm}>
@@ -621,7 +621,7 @@ export default function SuperadminAdmins() {
                 name="newPassword"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>New Password</FormLabel>
+                    <FormLabel>Nueva Contraseña</FormLabel>
                     <FormControl>
                       <Input {...field} type="password" data-testid="input-new-password" />
                     </FormControl>
@@ -640,14 +640,14 @@ export default function SuperadminAdmins() {
                   }}
                   data-testid="button-cancel-password"
                 >
-                  Cancel
+                  Cancelar
                 </Button>
                 <Button
                   type="submit"
                   disabled={changePasswordMutation.isPending}
                   data-testid="button-save-password"
                 >
-                  {changePasswordMutation.isPending ? "Changing..." : "Change Password"}
+                  {changePasswordMutation.isPending ? "Cambiando..." : "Cambiar Contraseña"}
                 </Button>
               </DialogFooter>
             </form>
