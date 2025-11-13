@@ -143,6 +143,7 @@ export default function Login() {
           <div className="mt-6 p-4 bg-muted/50 rounded-md">
             <p className="text-xs text-muted-foreground mb-2">Credenciales de prueba:</p>
             <div className="space-y-1 text-xs font-mono">
+              <p>Superadmin: superadmin@administra.com / password</p>
               <p>Admin: admin@gestiona.com / password</p>
               <p>Presidente: presidente@lasflores.com / password</p>
               <p>Vecino: vecino@lasflores.com / password</p>
