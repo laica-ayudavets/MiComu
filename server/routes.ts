@@ -38,6 +38,7 @@ import {
   insertPropertyCompanySchema,
   insertCommunitySchema,
   insertUserSchema,
+  superAdminUpdateUserSchema,
   users,
   type User
 } from "@shared/schema";
@@ -100,6 +101,38 @@ async function ensureDefaultData() {
   } else {
     community = communities[0];
     community2 = communities[1] || community;
+  }
+
+  // Create superadmin user if it doesn't exist
+  const superadminEmail = process.env.SUPERADMIN_EMAIL || "superadmin@administra.com";
+  const superadminPassword = process.env.SUPERADMIN_PASSWORD || "superadmin123";
+  
+  let superadminUser = await storage.getUserByEmail(superadminEmail);
+  if (!superadminUser) {
+    try {
+      const passwordHash = await hashPassword(superadminPassword);
+      superadminUser = await storage.createUser({
+        email: superadminEmail,
+        username: "superadmin",
+        password: passwordHash,
+        fullName: "Super Administrador",
+        role: "superadmin",
+        propertyCompanyId: null, // Superadmin has no company
+        communityId: null, // Superadmin has no community
+        unitNumber: null,
+      });
+      console.log(`✅ Created superadmin user: ${superadminEmail}`);
+    } catch (error) {
+      console.error("Error creating superadmin user:", error);
+    }
+  } else {
+    // Verify password and update if needed
+    const isPasswordValid = await verifyPassword(superadminPassword, superadminUser.password);
+    if (!isPasswordValid) {
+      const passwordHash = await hashPassword(superadminPassword);
+      await storage.updateUserPassword(superadminUser.id, passwordHash);
+      console.log(`✅ Updated password for superadmin user: ${superadminEmail}`);
+    }
   }
 
   // Create test users if they don't exist, or update passwords if needed
@@ -1303,6 +1336,242 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting attendance:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // ========== SUPERADMIN ROUTES ==========
+  // These routes are only accessible to users with the superadmin role
+  
+  // Get superadmin dashboard stats
+  app.get("/api/superadmin/stats", requireRole("superadmin"), async (req: Request, res: Response) => {
+    try {
+      const stats = await storage.getSuperadminStats();
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching superadmin stats:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Get all property companies
+  app.get("/api/superadmin/property-companies", requireRole("superadmin"), async (req: Request, res: Response) => {
+    try {
+      const companies = await storage.getAllPropertyCompanies();
+      res.json(companies);
+    } catch (error) {
+      console.error("Error fetching property companies:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Create a new property company
+  app.post("/api/superadmin/property-companies", requireRole("superadmin"), async (req: Request, res: Response) => {
+    try {
+      const data = insertPropertyCompanySchema.parse(req.body);
+      const company = await storage.createPropertyCompany(data);
+      res.status(201).json(company);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation error", details: error.errors });
+      }
+      console.error("Error creating property company:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Update a property company
+  app.patch("/api/superadmin/property-companies/:id", requireRole("superadmin"), async (req: Request, res: Response) => {
+    try {
+      const data = insertPropertyCompanySchema.partial().parse(req.body);
+      const company = await storage.updatePropertyCompany(req.params.id, data);
+      if (!company) {
+        return res.status(404).json({ error: "Property company not found" });
+      }
+      res.json(company);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation error", details: error.errors });
+      }
+      console.error("Error updating property company:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Delete a property company
+  app.delete("/api/superadmin/property-companies/:id", requireRole("superadmin"), async (req: Request, res: Response) => {
+    try {
+      // Check if there are any communities associated with this company
+      const communities = await storage.getCommunities(req.params.id);
+      if (communities.length > 0) {
+        return res.status(400).json({ 
+          error: "Cannot delete property company",
+          message: `This property company has ${communities.length} community/communities. Please delete them first to prevent data loss.`
+        });
+      }
+      
+      // Check if there are any admin_fincas users associated with this company
+      const admins = await storage.getAdminFincasUsers(req.params.id);
+      if (admins.length > 0) {
+        return res.status(400).json({ 
+          error: "Cannot delete property company",
+          message: `This property company has ${admins.length} admin user(s). Please reassign or delete them first.`
+        });
+      }
+      
+      const deleted = await storage.deletePropertyCompany(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Property company not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting property company:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Get all admin_fincas users (optionally filtered by property company)
+  app.get("/api/superadmin/admins", requireRole("superadmin"), async (req: Request, res: Response) => {
+    try {
+      const propertyCompanyId = req.query.propertyCompanyId as string | undefined;
+      const admins = await storage.getAdminFincasUsers(propertyCompanyId);
+      // Strip password hashes from response
+      const sanitizedAdmins = admins.map(({ password, ...admin }) => admin);
+      res.json(sanitizedAdmins);
+    } catch (error) {
+      console.error("Error fetching admin users:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Create a new admin_fincas user
+  app.post("/api/superadmin/admins", requireRole("superadmin"), async (req: Request, res: Response) => {
+    try {
+      const { email, password, username, fullName, role, propertyCompanyId } = req.body;
+
+      // Validate required fields
+      if (!email || !password || !username || !propertyCompanyId) {
+        return res.status(400).json({ error: "Email, username, password, and propertyCompanyId are required" });
+      }
+
+      // Check if user already exists
+      const existingUser = await storage.getUserByEmail(email.toLowerCase());
+      if (existingUser) {
+        return res.status(400).json({ error: "Email already registered" });
+      }
+
+      // Only allow superadmin to create superadmin or admin_fincas users
+      const requestedRole = role || "admin_fincas";
+      if (requestedRole !== "superadmin" && requestedRole !== "admin_fincas") {
+        return res.status(400).json({ error: "Can only create superadmin or admin_fincas users" });
+      }
+
+      // Verify property company exists (unless creating superadmin)
+      if (requestedRole === "admin_fincas") {
+        const company = await storage.getPropertyCompany(propertyCompanyId);
+        if (!company) {
+          return res.status(404).json({ error: "Property company not found" });
+        }
+      }
+
+      const hashedPassword = await hashPassword(password);
+      
+      const userData = {
+        email: email.toLowerCase(),
+        password: hashedPassword,
+        username,
+        fullName,
+        role: requestedRole,
+        propertyCompanyId: requestedRole === "admin_fincas" ? propertyCompanyId : null,
+        communityId: null, // superadmin and admin_fincas have no community
+        unitNumber: null,
+      };
+
+      const user = await storage.createUser(userData);
+      
+      // Strip password from response
+      const { password: _, ...sanitizedUser } = user;
+      res.status(201).json(sanitizedUser);
+    } catch (error) {
+      console.error("Error creating admin user:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Update an admin user (safe update without password)
+  app.patch("/api/superadmin/admins/:id", requireRole("superadmin"), async (req: Request, res: Response) => {
+    try {
+      const data = superAdminUpdateUserSchema.parse(req.body);
+      
+      // Get existing user to check current state
+      const existingUser = await storage.getUser(req.params.id);
+      if (!existingUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      // Validate propertyCompanyId if provided
+      if (data.propertyCompanyId !== undefined && data.propertyCompanyId !== null) {
+        const company = await storage.getPropertyCompany(data.propertyCompanyId);
+        if (!company) {
+          return res.status(404).json({ error: "Property company not found" });
+        }
+      }
+      
+      // Determine final role and propertyCompanyId after update
+      const finalRole = data.role !== undefined ? data.role : existingUser.role;
+      const finalPropertyCompanyId = data.propertyCompanyId !== undefined 
+        ? data.propertyCompanyId 
+        : existingUser.propertyCompanyId;
+      
+      // If changing to/is admin_fincas, ensure propertyCompanyId is set
+      if (finalRole === "admin_fincas" && finalPropertyCompanyId === null) {
+        return res.status(400).json({ 
+          error: "admin_fincas users must have a propertyCompanyId",
+          message: "Please provide a propertyCompanyId when setting role to admin_fincas"
+        });
+      }
+      
+      // If changing to superadmin, ensure propertyCompanyId is null
+      if (finalRole === "superadmin" && finalPropertyCompanyId !== null) {
+        return res.status(400).json({ error: "superadmin users cannot have a propertyCompanyId" });
+      }
+      
+      const user = await storage.updateUser(req.params.id, data);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      // Strip password from response
+      const { password: _, ...sanitizedUser } = user;
+      res.json(sanitizedUser);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation error", details: error.errors });
+      }
+      console.error("Error updating admin user:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Change admin user password (secure endpoint)
+  app.post("/api/superadmin/admins/:id/change-password", requireRole("superadmin"), async (req: Request, res: Response) => {
+    try {
+      const { password } = req.body;
+      
+      if (!password || password.length < 6) {
+        return res.status(400).json({ error: "Password must be at least 6 characters" });
+      }
+
+      const user = await storage.getUser(req.params.id);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const hashedPassword = await hashPassword(password);
+      await storage.updateUserPassword(req.params.id, hashedPassword);
+      
+      res.json({ success: true, message: "Password updated successfully" });
+    } catch (error) {
+      console.error("Error changing password:", error);
       res.status(500).json({ error: "Internal server error" });
     }
   });

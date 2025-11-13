@@ -3,8 +3,8 @@ import { pgTable, text, varchar, timestamp, integer, boolean, decimal, pgEnum } 
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Updated role enum for 3-tier hierarchy
-export const roleEnum = pgEnum("role", ["admin_fincas", "presidente", "vecino"]);
+// Updated role enum for 4-tier hierarchy (with superadmin as highest level)
+export const roleEnum = pgEnum("role", ["superadmin", "admin_fincas", "presidente", "vecino"]);
 export const incidentStatusEnum = pgEnum("incident_status", ["pendiente", "en_curso", "resuelto"]);
 export const incidentPriorityEnum = pgEnum("incident_priority", ["alta", "media", "baja"]);
 export const agreementStatusEnum = pgEnum("agreement_status", ["pendiente", "aprobado", "rechazado"]);
@@ -55,27 +55,36 @@ export type Community = typeof communities.$inferSelect;
 // Tier 3: Users (Vecinos, Presidentes, and Property Company Admins)
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  communityId: varchar("community_id").references(() => communities.id, { onDelete: "cascade" }), // Null for admin_fincas users
-  propertyCompanyId: varchar("property_company_id").references(() => propertyCompanies.id, { onDelete: "cascade" }), // For admin_fincas users
+  communityId: varchar("community_id").references(() => communities.id, { onDelete: "cascade" }), // Null for admin_fincas and superadmin users
+  propertyCompanyId: varchar("property_company_id").references(() => propertyCompanies.id, { onDelete: "cascade" }), // For admin_fincas users, null for superadmin
   username: text("username").notNull(),
   password: text("password").notNull(),
   email: text("email").notNull(),
   role: roleEnum("role").notNull().default("vecino"),
   fullName: text("full_name"),
   unitNumber: text("unit_number"), // Apartment/unit number for residents
+  active: boolean("active").notNull().default(true), // For soft-delete/disable users
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
+  active: true, // Active is managed separately
 });
 export const updateUserSchema = insertUserSchema.partial().omit({
   communityId: true,
   propertyCompanyId: true,
+  password: true, // Password changes require separate secure endpoint
+});
+// Superadmin-specific schema for managing admin users
+export const superAdminUpdateUserSchema = updateUserSchema.extend({
+  propertyCompanyId: z.string().nullable().optional(), // Superadmin can change company assignment
+  active: z.boolean().optional(), // Superadmin can enable/disable users
 });
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type UpdateUser = z.infer<typeof updateUserSchema>;
+export type SuperAdminUpdateUser = z.infer<typeof superAdminUpdateUserSchema>;
 export type User = typeof users.$inferSelect;
 
 // Domain entities now belong to communities

@@ -2,6 +2,7 @@ import { db } from "./db";
 import { 
   type User, 
   type InsertUser,
+  type SuperAdminUpdateUser,
   type PropertyCompany,
   type InsertPropertyCompany,
   type Community,
@@ -52,11 +53,17 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUserPassword(id: string, passwordHash: string): Promise<void>;
+  getAllUsers(): Promise<User[]>; // Superadmin: all users across system
+  getAdminFincasUsers(propertyCompanyId?: string, includeInactive?: boolean): Promise<User[]>; // Superadmin: filter by company or get all, optionally include inactive
+  updateUser(id: string, updates: SuperAdminUpdateUser): Promise<User | undefined>; // Superadmin: safe update
   
   // Property Company management
   getPropertyCompany(id: string): Promise<PropertyCompany | undefined>;
   getPropertyCompanyByDomain(domain: string): Promise<PropertyCompany | undefined>;
+  getAllPropertyCompanies(): Promise<PropertyCompany[]>; // Superadmin: list all companies
   createPropertyCompany(company: InsertPropertyCompany): Promise<PropertyCompany>;
+  updatePropertyCompany(id: string, updates: Partial<InsertPropertyCompany>): Promise<PropertyCompany | undefined>; // Superadmin: edit company
+  deletePropertyCompany(id: string): Promise<boolean>; // Superadmin: delete company
   
   // Community management
   getCommunities(propertyCompanyId: string): Promise<Community[]>;
@@ -151,6 +158,14 @@ export interface IStorage {
     totalDerramas: number;
     unpaidQuotas: number;
   }>;
+  
+  // Superadmin stats
+  getSuperadminStats(): Promise<{
+    totalPropertyCompanies: number;
+    totalAdminUsers: number;
+    activeAdminUsers: number;
+    totalCommunities: number;
+  }>;
 }
 
 export class DbStorage implements IStorage {
@@ -185,6 +200,36 @@ export class DbStorage implements IStorage {
       .where(eq(users.id, id));
   }
 
+  async getAllUsers(): Promise<User[]> {
+    return db.select().from(users)
+      .orderBy(desc(users.createdAt));
+  }
+
+  async getAdminFincasUsers(propertyCompanyId?: string, includeInactive: boolean = true): Promise<User[]> {
+    // For superadmin: always include inactive users so they can be managed
+    const conditions = [eq(users.role, "admin_fincas")];
+    
+    if (propertyCompanyId) {
+      conditions.push(eq(users.propertyCompanyId, propertyCompanyId));
+    }
+    
+    if (!includeInactive) {
+      conditions.push(eq(users.active, true));
+    }
+    
+    return db.select().from(users)
+      .where(and(...conditions))
+      .orderBy(desc(users.createdAt));
+  }
+
+  async updateUser(id: string, updates: SuperAdminUpdateUser): Promise<User | undefined> {
+    const result = await db.update(users)
+      .set(updates)
+      .where(eq(users.id, id))
+      .returning();
+    return result[0];
+  }
+
   // Property Company methods
   async getPropertyCompany(id: string): Promise<PropertyCompany | undefined> {
     const result = await db.select().from(propertyCompanies).where(eq(propertyCompanies.id, id)).limit(1);
@@ -196,9 +241,28 @@ export class DbStorage implements IStorage {
     return result[0];
   }
 
+  async getAllPropertyCompanies(): Promise<PropertyCompany[]> {
+    return db.select().from(propertyCompanies)
+      .orderBy(desc(propertyCompanies.createdAt));
+  }
+
   async createPropertyCompany(company: InsertPropertyCompany): Promise<PropertyCompany> {
     const result = await db.insert(propertyCompanies).values(company).returning();
     return result[0];
+  }
+
+  async updatePropertyCompany(id: string, updates: Partial<InsertPropertyCompany>): Promise<PropertyCompany | undefined> {
+    const result = await db.update(propertyCompanies)
+      .set(updates)
+      .where(eq(propertyCompanies.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deletePropertyCompany(id: string): Promise<boolean> {
+    const result = await db.delete(propertyCompanies)
+      .where(eq(propertyCompanies.id, id));
+    return result.rowCount !== null && result.rowCount > 0;
   }
 
   // Community methods
@@ -657,6 +721,38 @@ export class DbStorage implements IStorage {
       activeDerramas: activeDerramas?.count || 0,
       totalDerramas: totalDerramasCount?.count || 0,
       unpaidQuotas: unpaidQuotasCount?.count || 0,
+    };
+  }
+
+  // Superadmin stats
+  async getSuperadminStats(): Promise<{
+    totalPropertyCompanies: number;
+    totalAdminUsers: number;
+    activeAdminUsers: number;
+    totalCommunities: number;
+  }> {
+    const [companiesCount] = await db.select({ count: sql<number>`count(*)::int` })
+      .from(propertyCompanies);
+    
+    const [adminUsersCount] = await db.select({ count: sql<number>`count(*)::int` })
+      .from(users)
+      .where(eq(users.role, "admin_fincas"));
+    
+    const [activeAdminCount] = await db.select({ count: sql<number>`count(*)::int` })
+      .from(users)
+      .where(and(
+        eq(users.role, "admin_fincas"),
+        eq(users.active, true)
+      ));
+    
+    const [communitiesCount] = await db.select({ count: sql<number>`count(*)::int` })
+      .from(communities);
+
+    return {
+      totalPropertyCompanies: companiesCount?.count || 0,
+      totalAdminUsers: adminUsersCount?.count || 0,
+      activeAdminUsers: activeAdminCount?.count || 0,
+      totalCommunities: communitiesCount?.count || 0,
     };
   }
 }
