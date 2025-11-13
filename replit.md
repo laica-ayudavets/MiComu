@@ -27,13 +27,19 @@ The UI features a professional, modern design with a purple/orange glassmorphism
 ## Core Features Implemented
 
 -   **4-Tier Hierarchy System**: Superadmin, Property Management Companies, Communities, Users.
--   **Superadmin Panel**: CRUD for property companies and `admin_fincas` users.
+-   **Superadmin Panel**: 
+    -   CRUD for property companies and `admin_fincas` users
+    -   **Custom Password Creation**: Superadmin can set custom passwords when creating admin_fincas users with strong validation (min 8 characters, uppercase, lowercase, number)
+    -   Password visibility toggle for improved UX
 -   **Role-Based Access Control**: Granular permissions for `superadmin`, `admin_fincas`, `presidente`, and `vecino` roles.
 -   **Community-Scoped Data**: Strict data isolation per community.
 -   **Quotas Management**: Comprehensive system for managing resident fees, payment statuses, and assignments.
 -   **Meetings Management**: Module for managing community meetings, including agenda items, attendance, and minutes.
 -   **Comprehensive Filtering**: Advanced filtering across all core modules (incidents, documents, agreements, financial assessments, meetings).
--   **Security Hardening**: All business endpoints protected with authentication and authorization middleware.
+-   **Security Hardening**: 
+    -   All business endpoints protected with authentication and authorization middleware
+    -   Passwords hashed with scrypt before storage
+    -   Passwords never returned in API responses
 
 # External Dependencies
 
