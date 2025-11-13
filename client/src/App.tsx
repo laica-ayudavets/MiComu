@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
+import { SuperadminSidebar } from "@/components/superadmin-sidebar";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { CommunitySelector } from "@/components/community-selector";
@@ -23,9 +24,18 @@ import Cuotas from "@/pages/cuotas";
 import Juntas from "@/pages/juntas";
 import JuntaDetail from "@/pages/junta-detail";
 import Configuracion from "@/pages/configuracion";
+import SuperadminDashboard from "@/pages/superadmin";
+import SuperadminCompanies from "@/pages/superadmin-companies";
+import SuperadminAdmins from "@/pages/superadmin-admins";
 
-function AppLayout({ children }: { children: React.ReactNode }) {
+interface AppLayoutProps {
+  children: React.ReactNode;
+  variant?: "default" | "superadmin";
+}
+
+function AppLayout({ children, variant = "default" }: AppLayoutProps) {
   const { data: user, isLoading } = useUser();
+  const isSuperadmin = variant === "superadmin";
 
   // Redirect to login if not authenticated
   if (isLoading) {
@@ -40,6 +50,11 @@ function AppLayout({ children }: { children: React.ReactNode }) {
     return <Redirect to="/login" />;
   }
 
+  // Redirect non-superadmin users away from superadmin pages
+  if (isSuperadmin && user.role !== "superadmin") {
+    return <Redirect to="/" />;
+  }
+
   const style = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",
@@ -48,12 +63,12 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <SidebarProvider style={style as React.CSSProperties}>
       <div className="flex h-screen w-full">
-        <AppSidebar />
+        {isSuperadmin ? <SuperadminSidebar /> : <AppSidebar />}
         <div className="flex flex-col flex-1 overflow-hidden">
           <header className="flex items-center justify-between p-3 border-b gap-4">
             <div className="flex items-center gap-2">
               <SidebarTrigger data-testid="button-sidebar-toggle" />
-              <CommunitySelector />
+              {!isSuperadmin && <CommunitySelector />}
             </div>
             <ThemeToggle />
           </header>
@@ -69,6 +84,21 @@ function Router() {
     <Switch>
       <Route path="/login" component={Login} />
       <Route path="/landing" component={Landing} />
+      <Route path="/superadmin">
+        <AppLayout variant="superadmin">
+          <SuperadminDashboard />
+        </AppLayout>
+      </Route>
+      <Route path="/superadmin/companies">
+        <AppLayout variant="superadmin">
+          <SuperadminCompanies />
+        </AppLayout>
+      </Route>
+      <Route path="/superadmin/admins">
+        <AppLayout variant="superadmin">
+          <SuperadminAdmins />
+        </AppLayout>
+      </Route>
       <Route path="/">
         <AppLayout>
           <Dashboard />
