@@ -17,6 +17,9 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: false }));
 
+// Trust proxy for Replit deployment (enables secure cookies behind HTTPS proxy)
+app.set("trust proxy", 1);
+
 // Setup authentication and sessions
 setupAuth(app);
 
