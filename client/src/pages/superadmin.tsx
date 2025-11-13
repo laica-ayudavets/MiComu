@@ -19,22 +19,22 @@ export default function SuperadminDashboard() {
 
   const statsData = stats ? [
     { 
-      title: "Property Companies", 
+      title: "Empresas de Gestión", 
       value: stats.totalPropertyCompanies, 
       icon: Building2 
     },
     { 
-      title: "Total Admin Users", 
+      title: "Total de Administradores", 
       value: stats.totalAdminUsers, 
       icon: Users 
     },
     { 
-      title: "Active Admins", 
+      title: "Administradores Activos", 
       value: stats.activeAdminUsers, 
       icon: UserCheck 
     },
     { 
-      title: "Communities Managed", 
+      title: "Comunidades Gestionadas", 
       value: stats.totalCommunities, 
       icon: MapPin 
     },
@@ -45,10 +45,10 @@ export default function SuperadminDashboard() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary via-accent to-primary">
-            Superadmin Panel
+            Panel de Superadministrador
           </h1>
           <p className="text-muted-foreground mt-2">
-            Manage property management companies and administrators
+            Gestiona las empresas de administración y sus administradores
           </p>
         </div>
       </div>
@@ -72,15 +72,15 @@ export default function SuperadminDashboard() {
       <div className="grid gap-6 lg:grid-cols-2">
         <Card className="border-0 shadow-md">
           <CardHeader>
-            <CardTitle className="text-lg">Property Companies Management</CardTitle>
+            <CardTitle className="text-lg">Gestión de Empresas</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Create and manage property management companies that oversee multiple residential communities.
+              Crear y gestionar empresas de administración de fincas que supervisan múltiples comunidades de vecinos.
             </p>
             <Link href="/superadmin/companies">
               <Button className="w-full" data-testid="button-manage-companies">
-                Manage Companies
+                Gestionar Empresas
               </Button>
             </Link>
           </CardContent>
@@ -88,15 +88,15 @@ export default function SuperadminDashboard() {
 
         <Card className="border-0 shadow-md">
           <CardHeader>
-            <CardTitle className="text-lg">Administrator Accounts</CardTitle>
+            <CardTitle className="text-lg">Cuentas de Administrador</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Create and manage admin_fincas user accounts, assign them to property companies, and control access.
+              Crear y gestionar cuentas de administradores de fincas, asignarlas a empresas de gestión y controlar el acceso.
             </p>
             <Link href="/superadmin/admins">
               <Button className="w-full" data-testid="button-manage-admins">
-                Manage Admins
+                Gestionar Administradores
               </Button>
             </Link>
           </CardContent>

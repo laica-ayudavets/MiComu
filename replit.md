@@ -31,6 +31,7 @@ The UI features a professional, modern design with a purple/orange glassmorphism
     -   CRUD for property companies and `admin_fincas` users
     -   **Custom Password Creation**: Superadmin can set custom passwords when creating admin_fincas users with strong validation (min 8 characters, uppercase, lowercase, number)
     -   Password visibility toggle for improved UX
+    -   **Full Spanish Localization**: All superadmin interfaces (dashboard, companies management, admin users management) fully translated to Spanish with property management domain terminology
 -   **Role-Based Access Control**: Granular permissions for `superadmin`, `admin_fincas`, `presidente`, and `vecino` roles.
 -   **Community-Scoped Data**: Strict data isolation per community.
 -   **Quotas Management**: Comprehensive system for managing resident fees, payment statuses, and assignments.
@@ -40,6 +41,21 @@ The UI features a professional, modern design with a purple/orange glassmorphism
     -   All business endpoints protected with authentication and authorization middleware
     -   Passwords hashed with scrypt before storage
     -   Passwords never returned in API responses
+
+## Localization Strategy
+
+The application implements **Spanish-only localization** using direct string replacement (no i18n library), appropriate for a Spanish market-focused product managing Spanish residential communities.
+
+**Completed Translations:**
+-   **Superadmin Dashboard** (`client/src/pages/superadmin.tsx`): Statistics cards, navigation cards, page headers
+-   **Property Companies Management** (`client/src/pages/superadmin-companies.tsx`): Complete interface including forms, tables, dialogs, toasts, and validation messages
+-   **Admin Users Management** (`client/src/pages/superadmin-admins.tsx`): Complete interface including create/edit forms, password change dialog, status badges, and all user-facing text
+
+**Translation Approach:**
+-   Natural Spanish terminology for property management domain (e.g., "Empresa de Gestión", "Administrador de Fincas", "Comunidad de Vecinos")
+-   Consistent with Spanish legal and administrative language
+-   All form labels, buttons, validation messages, and toast notifications in Spanish
+-   Maintained technical accuracy while ensuring clarity for non-technical users
 
 # External Dependencies
 
