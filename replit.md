@@ -50,6 +50,7 @@ The application implements **Spanish-only localization** using direct string rep
 -   **Superadmin Dashboard** (`client/src/pages/superadmin.tsx`): Statistics cards, navigation cards, page headers
 -   **Property Companies Management** (`client/src/pages/superadmin-companies.tsx`): Complete interface including forms, tables, dialogs, toasts, and validation messages
 -   **Admin Users Management** (`client/src/pages/superadmin-admins.tsx`): Complete interface including create/edit forms, password change dialog, status badges, and all user-facing text
+-   **Superadmin Sidebar** (`client/src/components/superadmin-sidebar.tsx`): Navigation menu with Spanish labels ("Resumen", "Empresas de Gestión", "Cuentas de Administrador")
 
 **Translation Approach:**
 -   Natural Spanish terminology for property management domain (e.g., "Empresa de Gestión", "Administrador de Fincas", "Comunidad de Vecinos")

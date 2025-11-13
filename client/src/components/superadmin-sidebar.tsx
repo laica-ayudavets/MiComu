@@ -18,17 +18,17 @@ import { Link, useLocation } from "wouter";
 
 const superadminMenuItems = [
   {
-    title: "Overview",
+    title: "Resumen",
     url: "/superadmin",
     icon: LayoutDashboard,
   },
   {
-    title: "Property Companies",
+    title: "Empresas de Gestión",
     url: "/superadmin/companies",
     icon: Building2,
   },
   {
-    title: "Administrator Accounts",
+    title: "Cuentas de Administrador",
     url: "/superadmin/admins",
     icon: Users,
   },
@@ -46,13 +46,13 @@ export function SuperadminSidebar() {
           </div>
           <div>
             <h2 className="text-sm font-semibold">Administra Mi Comunidad</h2>
-            <p className="text-xs text-muted-foreground">Superadmin Panel</p>
+            <p className="text-xs text-muted-foreground">Panel de Superadministración</p>
           </div>
         </div>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Superadmin</SidebarGroupLabel>
+          <SidebarGroupLabel>Superadministración</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {superadminMenuItems.map((item) => (
