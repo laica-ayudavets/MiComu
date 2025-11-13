@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
 import { useUser } from "@/hooks/use-auth";
+import { getRoleLandingPath } from "@/lib/role-helpers";
 
 const loginSchema = z.object({
   email: z.string().email("Email inválido"),
@@ -26,10 +27,10 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const { data: user } = useUser();
 
-  // Redirect authenticated users to dashboard
+  // Redirect authenticated users to their role-based landing page
   useEffect(() => {
     if (user) {
-      setLocation("/");
+      setLocation(getRoleLandingPath(user));
     }
   }, [user, setLocation]);
 
@@ -54,7 +55,7 @@ export default function Login() {
         description: "Bienvenido a Administra mi comunidad",
       });
 
-      setLocation("/");
+      // Don't redirect here - let the useEffect handle it once user data loads
     } catch (error: any) {
       toast({
         variant: "destructive",

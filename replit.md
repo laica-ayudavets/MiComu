@@ -44,3 +44,34 @@ The UI features a professional, modern design with a purple/orange glassmorphism
 -   **Styling**: Tailwind CSS, PostCSS, Class Variance Authority, CLSX, Tailwind Merge
 -   **Development Tools**: Vite, TypeScript, ESBuild, Drizzle Kit
 -   **Session Management**: `connect-pg-simple`
+
+# Authentication & Navigation
+
+## Role-Based Redirects
+
+The application implements automatic role-based redirects to ensure users land on the correct dashboard after login:
+
+-   **Superadmin** (`role: "superadmin"`): Automatically redirects to `/superadmin` dashboard
+-   **Admin Fincas** (`role: "admin_fincas"`): Redirects to `/` (community dashboard)
+-   **Presidente** (`role: "presidente"`): Redirects to `/` (community dashboard)
+-   **Vecino** (`role: "vecino"`): Redirects to `/` (community dashboard)
+
+This is implemented via:
+-   `getRoleLandingPath()` helper function in `client/src/lib/role-helpers.ts`
+-   Login page (`client/src/pages/login.tsx`) uses this helper for post-login navigation
+-   AppLayout (`client/src/App.tsx`) guards against role mismatches:
+    -   Prevents non-superadmin users from accessing `/superadmin` routes
+    -   Redirects superadmin users away from community routes back to `/superadmin`
+
+## Test Credentials
+
+The platform includes pre-configured test users for all roles (created via `ensureDefaultData()` on server startup):
+
+| Role | Email | Password | Access |
+|------|-------|----------|--------|
+| Superadmin | superadmin@administra.com | password | Full platform access, property companies CRUD, admin users management |
+| Admin Fincas | admin@gestiona.com | password | Multi-community management, all community features |
+| Presidente | presidente@lasflores.com | password | Single community management, elevated permissions |
+| Vecino | vecino@lasflores.com | password | Single community access, resident features |
+
+**Password Auto-Repair**: The system automatically updates passwords on startup if they don't match the configured values (via scrypt hash verification).

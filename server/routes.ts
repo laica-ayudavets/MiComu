@@ -105,7 +105,7 @@ async function ensureDefaultData() {
 
   // Create superadmin user if it doesn't exist
   const superadminEmail = process.env.SUPERADMIN_EMAIL || "superadmin@administra.com";
-  const superadminPassword = process.env.SUPERADMIN_PASSWORD || "superadmin123";
+  const superadminPassword = process.env.SUPERADMIN_PASSWORD || "password";
   
   let superadminUser = await storage.getUserByEmail(superadminEmail);
   if (!superadminUser) {

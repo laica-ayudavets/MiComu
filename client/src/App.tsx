@@ -10,6 +10,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { CommunitySelector } from "@/components/community-selector";
 import { useUser } from "@/hooks/use-auth";
+import { getRoleLandingPath } from "@/lib/role-helpers";
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/landing";
 import Login from "@/pages/login";
@@ -53,6 +54,11 @@ function AppLayout({ children, variant = "default" }: AppLayoutProps) {
   // Redirect non-superadmin users away from superadmin pages
   if (isSuperadmin && user.role !== "superadmin") {
     return <Redirect to="/" />;
+  }
+
+  // Redirect superadmin users away from default pages to their landing page
+  if (!isSuperadmin && user.role === "superadmin") {
+    return <Redirect to={getRoleLandingPath(user)} />;
   }
 
   const style = {

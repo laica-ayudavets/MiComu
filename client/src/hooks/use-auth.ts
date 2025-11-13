@@ -7,9 +7,9 @@ export interface User {
   email: string;
   username: string;
   fullName: string;
-  role: "admin_fincas" | "presidente" | "vecino";
+  role: "superadmin" | "admin_fincas" | "presidente" | "vecino";
   communityId: string | null;
-  propertyCompanyId: string;
+  propertyCompanyId: string | null;
   selectedCommunityId?: string | null;
 }
 
