@@ -82,9 +82,25 @@ export const superAdminUpdateUserSchema = updateUserSchema.extend({
   propertyCompanyId: z.string().nullable().optional(), // Superadmin can change company assignment
   active: z.boolean().optional(), // Superadmin can enable/disable users
 });
+
+// Schema for creating admin_fincas with password (superadmin only)
+export const createAdminWithPasswordSchema = z.object({
+  username: z.string().min(3, "Username must be at least 3 characters"),
+  email: z.string().email("Invalid email address"),
+  fullName: z.string().min(1, "Full name is required"),
+  propertyCompanyId: z.string().uuid("Property company is required"),
+  password: z.string()
+    .min(8, "Password must be at least 8 characters")
+    .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
+    .regex(/[a-z]/, "Password must contain at least one lowercase letter")
+    .regex(/[0-9]/, "Password must contain at least one number"),
+  role: z.literal("admin_fincas").default("admin_fincas"),
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type UpdateUser = z.infer<typeof updateUserSchema>;
 export type SuperAdminUpdateUser = z.infer<typeof superAdminUpdateUserSchema>;
+export type CreateAdminWithPassword = z.infer<typeof createAdminWithPasswordSchema>;
 export type User = typeof users.$inferSelect;
 
 // Domain entities now belong to communities
