@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Users, Plus, Pencil, Search, Ban, CheckCircle, Key } from "lucide-react";
+import { Users, Plus, Pencil, Search, Ban, CheckCircle, Key, Eye, EyeOff } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,11 +36,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { createAdminWithPasswordSchema } from "@shared/schema";
 
 interface PropertyCompany {
   id: string;
@@ -58,12 +60,12 @@ interface AdminUser {
   createdAt: string;
 }
 
-const adminSchema = z.object({
-  username: z.string().min(3, "Username must be at least 3 characters"),
-  email: z.string().email("Invalid email address"),
-  fullName: z.string().min(1, "Full name is required"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
-  propertyCompanyId: z.string().min(1, "Property company is required"),
+// Derive frontend form schema from shared schema (omit role as it's fixed to admin_fincas)
+// Override propertyCompanyId to provide better validation error messages
+const adminFormSchema = createAdminWithPasswordSchema.omit({ role: true }).extend({
+  propertyCompanyId: z.string()
+    .min(1, "Property company is required")
+    .uuid("Invalid property company selection"),
 });
 
 const editAdminSchema = z.object({
@@ -78,7 +80,7 @@ const changePasswordSchema = z.object({
   newPassword: z.string().min(6, "Password must be at least 6 characters"),
 });
 
-type AdminFormData = z.infer<typeof adminSchema>;
+type AdminFormData = z.infer<typeof adminFormSchema>;
 type EditAdminFormData = z.infer<typeof editAdminSchema>;
 type ChangePasswordFormData = z.infer<typeof changePasswordSchema>;
 
@@ -89,6 +91,7 @@ export default function SuperadminAdmins() {
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [editingAdmin, setEditingAdmin] = useState<AdminUser | null>(null);
   const [selectedAdmin, setSelectedAdmin] = useState<AdminUser | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   const { data: admins = [], isLoading: adminsLoading } = useQuery<AdminUser[]>({
     queryKey: ["/api/superadmin/admins"],
@@ -99,13 +102,13 @@ export default function SuperadminAdmins() {
   });
 
   const form = useForm<AdminFormData>({
-    resolver: zodResolver(adminSchema),
+    resolver: zodResolver(adminFormSchema),
     defaultValues: {
       username: "",
       email: "",
       fullName: "",
       password: "",
-      propertyCompanyId: "",
+      propertyCompanyId: undefined,
     },
   });
 
@@ -133,6 +136,7 @@ export default function SuperadminAdmins() {
         description: "Administrator account has been created successfully",
       });
       setDialogOpen(false);
+      setShowPassword(false);
       form.reset();
     },
     onError: (error: Error) => {
@@ -156,6 +160,7 @@ export default function SuperadminAdmins() {
         description: "Administrator account has been updated successfully",
       });
       setDialogOpen(false);
+      setShowPassword(false);
       setEditingAdmin(null);
       editForm.reset();
     },
@@ -223,13 +228,7 @@ export default function SuperadminAdmins() {
 
   const handleCreateNew = () => {
     setEditingAdmin(null);
-    form.reset({
-      username: "",
-      email: "",
-      fullName: "",
-      password: "",
-      propertyCompanyId: "",
-    });
+    form.reset(); // Use default values which set propertyCompanyId to undefined
     setDialogOpen(true);
   };
 
@@ -528,8 +527,27 @@ export default function SuperadminAdmins() {
                     <FormItem>
                       <FormLabel>Password *</FormLabel>
                       <FormControl>
-                        <Input {...field} type="password" data-testid="input-admin-password" />
+                        <div className="relative">
+                          <Input 
+                            {...field} 
+                            type={showPassword ? "text" : "password"} 
+                            data-testid="input-admin-password" 
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-0 top-0 h-full"
+                            onClick={() => setShowPassword(!showPassword)}
+                            data-testid="button-toggle-password"
+                          >
+                            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </Button>
+                        </div>
                       </FormControl>
+                      <FormDescription className="text-xs">
+                        Minimum 8 characters with uppercase, lowercase, and number
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -540,7 +558,10 @@ export default function SuperadminAdmins() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Property Company *</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select 
+                        onValueChange={(value) => field.onChange(value || undefined)} 
+                        value={field.value ?? ""}
+                      >
                         <FormControl>
                           <SelectTrigger data-testid="select-company">
                             <SelectValue placeholder="Select a company" />
@@ -564,6 +585,7 @@ export default function SuperadminAdmins() {
                     variant="outline"
                     onClick={() => {
                       setDialogOpen(false);
+                      setShowPassword(false);
                       form.reset();
                     }}
                     data-testid="button-cancel"

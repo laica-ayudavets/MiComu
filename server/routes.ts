@@ -39,6 +39,7 @@ import {
   insertCommunitySchema,
   insertUserSchema,
   superAdminUpdateUserSchema,
+  createAdminWithPasswordSchema,
   users,
   type User
 } from "@shared/schema";
@@ -1447,43 +1448,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create a new admin_fincas user
   app.post("/api/superadmin/admins", requireRole("superadmin"), async (req: Request, res: Response) => {
     try {
-      const { email, password, username, fullName, role, propertyCompanyId } = req.body;
-
-      // Validate required fields
-      if (!email || !password || !username || !propertyCompanyId) {
-        return res.status(400).json({ error: "Email, username, password, and propertyCompanyId are required" });
-      }
+      // Validate and parse request body with strong password requirements
+      const data = createAdminWithPasswordSchema.parse(req.body);
 
       // Check if user already exists
-      const existingUser = await storage.getUserByEmail(email.toLowerCase());
+      const existingUser = await storage.getUserByEmail(data.email.toLowerCase());
       if (existingUser) {
         return res.status(400).json({ error: "Email already registered" });
       }
 
-      // Only allow superadmin to create superadmin or admin_fincas users
-      const requestedRole = role || "admin_fincas";
-      if (requestedRole !== "superadmin" && requestedRole !== "admin_fincas") {
-        return res.status(400).json({ error: "Can only create superadmin or admin_fincas users" });
+      // Verify property company exists
+      const company = await storage.getPropertyCompany(data.propertyCompanyId);
+      if (!company) {
+        return res.status(404).json({ error: "Property company not found" });
       }
 
-      // Verify property company exists (unless creating superadmin)
-      if (requestedRole === "admin_fincas") {
-        const company = await storage.getPropertyCompany(propertyCompanyId);
-        if (!company) {
-          return res.status(404).json({ error: "Property company not found" });
-        }
-      }
-
-      const hashedPassword = await hashPassword(password);
+      // Hash password securely before storage
+      const hashedPassword = await hashPassword(data.password);
       
       const userData = {
-        email: email.toLowerCase(),
+        email: data.email.toLowerCase(),
         password: hashedPassword,
-        username,
-        fullName,
-        role: requestedRole,
-        propertyCompanyId: requestedRole === "admin_fincas" ? propertyCompanyId : null,
-        communityId: null, // superadmin and admin_fincas have no community
+        username: data.username,
+        fullName: data.fullName,
+        role: "admin_fincas" as const,
+        propertyCompanyId: data.propertyCompanyId,
+        communityId: null, // admin_fincas users have no community
         unitNumber: null,
       };
 
@@ -1494,6 +1484,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(sanitizedUser);
     } catch (error) {
       console.error("Error creating admin user:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          error: "Validation failed", 
+          details: error.errors.map(e => e.message).join(", ")
+        });
+      }
       res.status(500).json({ error: "Internal server error" });
     }
   });
