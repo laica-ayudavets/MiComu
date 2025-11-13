@@ -46,11 +46,11 @@ interface PropertyCompany {
 }
 
 const companySchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  cif: z.string().min(1, "CIF is required"),
+  name: z.string().min(1, "El nombre es obligatorio"),
+  cif: z.string().min(1, "El CIF es obligatorio"),
   address: z.string().optional(),
   phone: z.string().optional(),
-  email: z.string().email().optional().or(z.literal("")),
+  email: z.string().email("Email inválido").optional().or(z.literal("")),
 });
 
 type CompanyFormData = z.infer<typeof companySchema>;
@@ -86,8 +86,8 @@ export default function SuperadminCompanies() {
       queryClient.invalidateQueries({ queryKey: ["/api/superadmin/property-companies"] });
       queryClient.invalidateQueries({ queryKey: ["/api/superadmin/stats"] });
       toast({
-        title: "Company created",
-        description: "Property company has been created successfully",
+        title: "Empresa creada",
+        description: "La empresa de gestión se ha creado correctamente",
       });
       setDialogOpen(false);
       form.reset();
@@ -108,8 +108,8 @@ export default function SuperadminCompanies() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/superadmin/property-companies"] });
       toast({
-        title: "Company updated",
-        description: "Property company has been updated successfully",
+        title: "Empresa actualizada",
+        description: "La empresa de gestión se ha actualizado correctamente",
       });
       setDialogOpen(false);
       setEditingCompany(null);
@@ -132,16 +132,16 @@ export default function SuperadminCompanies() {
       queryClient.invalidateQueries({ queryKey: ["/api/superadmin/property-companies"] });
       queryClient.invalidateQueries({ queryKey: ["/api/superadmin/stats"] });
       toast({
-        title: "Company deleted",
-        description: "Property company has been deleted successfully",
+        title: "Empresa eliminada",
+        description: "La empresa de gestión se ha eliminado correctamente",
       });
       setDeleteDialogOpen(false);
       setCompanyToDelete(null);
     },
     onError: (error: any) => {
       toast({
-        title: "Cannot delete company",
-        description: error.message || "This company has dependent communities or admins",
+        title: "No se puede eliminar",
+        description: error.message || "Esta empresa tiene comunidades o administradores asociados",
         variant: "destructive",
       });
       setDeleteDialogOpen(false);
@@ -195,27 +195,27 @@ export default function SuperadminCompanies() {
     <div className="p-6 space-y-6 bg-gradient-to-br from-background via-primary/[0.02] to-accent/[0.02] min-h-full" data-testid="page-superadmin-companies">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Property Companies</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Empresas de Gestión</h1>
           <p className="text-muted-foreground mt-2">
-            Manage property management companies and their details
+            Gestiona las empresas de gestión de fincas y sus detalles
           </p>
         </div>
         <Button onClick={handleCreateNew} data-testid="button-create-company">
           <Plus className="w-4 h-4 mr-2" />
-          New Company
+          Nueva Empresa
         </Button>
       </div>
 
       <Card className="border-0 shadow-md">
         <CardHeader>
-          <CardTitle>Companies List</CardTitle>
-          <CardDescription>Search and manage all property companies</CardDescription>
+          <CardTitle>Lista de Empresas</CardTitle>
+          <CardDescription>Busca y gestiona todas las empresas de gestión</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
-              placeholder="Search by name or CIF..."
+              placeholder="Buscar por nombre o CIF..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
@@ -230,16 +230,16 @@ export default function SuperadminCompanies() {
           ) : filteredCompanies.length === 0 ? (
             <div className="text-center py-12">
               <Building2 className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">No companies found</p>
+              <p className="text-muted-foreground">No se encontraron empresas</p>
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
+                  <TableHead>Nombre</TableHead>
                   <TableHead>CIF</TableHead>
-                  <TableHead>Contact</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>Contacto</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -280,12 +280,12 @@ export default function SuperadminCompanies() {
         <DialogContent data-testid="dialog-company-form">
           <DialogHeader>
             <DialogTitle>
-              {editingCompany ? "Edit Property Company" : "Create New Property Company"}
+              {editingCompany ? "Editar Empresa de Gestión" : "Crear Nueva Empresa de Gestión"}
             </DialogTitle>
             <DialogDescription>
               {editingCompany
-                ? "Update the property company details"
-                : "Enter the details for the new property company"}
+                ? "Actualiza los detalles de la empresa de gestión"
+                : "Introduce los detalles de la nueva empresa de gestión"}
             </DialogDescription>
           </DialogHeader>
           <Form {...form}>
@@ -295,7 +295,7 @@ export default function SuperadminCompanies() {
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Company Name *</FormLabel>
+                    <FormLabel>Nombre de la Empresa *</FormLabel>
                     <FormControl>
                       <Input {...field} data-testid="input-company-name" />
                     </FormControl>
@@ -321,7 +321,7 @@ export default function SuperadminCompanies() {
                 name="address"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Address</FormLabel>
+                    <FormLabel>Dirección</FormLabel>
                     <FormControl>
                       <Input {...field} data-testid="input-company-address" />
                     </FormControl>
@@ -334,7 +334,7 @@ export default function SuperadminCompanies() {
                 name="phone"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Phone</FormLabel>
+                    <FormLabel>Teléfono</FormLabel>
                     <FormControl>
                       <Input {...field} data-testid="input-company-phone" />
                     </FormControl>
@@ -366,14 +366,14 @@ export default function SuperadminCompanies() {
                   }}
                   data-testid="button-cancel"
                 >
-                  Cancel
+                  Cancelar
                 </Button>
                 <Button
                   type="submit"
                   disabled={createMutation.isPending || updateMutation.isPending}
                   data-testid="button-save-company"
                 >
-                  {createMutation.isPending || updateMutation.isPending ? "Saving..." : "Save"}
+                  {createMutation.isPending || updateMutation.isPending ? "Guardando..." : "Guardar"}
                 </Button>
               </DialogFooter>
             </form>
@@ -384,9 +384,9 @@ export default function SuperadminCompanies() {
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent data-testid="dialog-delete-confirm">
           <DialogHeader>
-            <DialogTitle>Delete Property Company</DialogTitle>
+            <DialogTitle>Eliminar Empresa de Gestión</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete "{companyToDelete?.name}"? This action cannot be undone if there are no dependent communities or admin users.
+              ¿Estás seguro de que quieres eliminar "{companyToDelete?.name}"? Esta acción no se puede deshacer si no hay comunidades o administradores asociados.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -398,7 +398,7 @@ export default function SuperadminCompanies() {
               }}
               data-testid="button-cancel-delete"
             >
-              Cancel
+              Cancelar
             </Button>
             <Button
               variant="destructive"
@@ -406,7 +406,7 @@ export default function SuperadminCompanies() {
               disabled={deleteMutation.isPending}
               data-testid="button-confirm-delete"
             >
-              {deleteMutation.isPending ? "Deleting..." : "Delete"}
+              {deleteMutation.isPending ? "Eliminando..." : "Eliminar"}
             </Button>
           </DialogFooter>
         </DialogContent>
