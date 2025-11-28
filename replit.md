@@ -32,6 +32,13 @@ The UI features a professional, modern design with a purple/orange glassmorphism
     -   **Custom Password Creation**: Superadmin can set custom passwords when creating admin_fincas users with strong validation (min 8 characters, uppercase, lowercase, number)
     -   Password visibility toggle for improved UX
     -   **Full Spanish Localization**: All superadmin interfaces (dashboard, companies management, admin users management) fully translated to Spanish with property management domain terminology
+-   **Community Management** (Admin Fincas):
+    -   Full CRUD operations for communities within user's property company
+    -   Create new communities with name, address, city, postal code, province, and unit count
+    -   Edit existing community details
+    -   Delete communities with confirmation dialog
+    -   Community selector to switch between managed communities
+    -   Security: Admin can only manage communities within their own property company
 -   **Role-Based Access Control**: Granular permissions for `superadmin`, `admin_fincas`, `presidente`, and `vecino` roles.
 -   **Community-Scoped Data**: Strict data isolation per community.
 -   **Quotas Management**: Comprehensive system for managing resident fees, payment statuses, and assignments.

@@ -1,14 +1,32 @@
-import { useState, useEffect } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Redirect } from "wouter";
-import { Building2, MapPin, Search, Users } from "lucide-react";
+import { Building2, MapPin, Search, Users, Plus, Pencil, Trash2, Eye, EyeOff } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useCommunities, useCurrentCommunity, useUser } from "@/hooks/use-auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import type { Community } from "@shared/schema";
+
+const communityFormSchema = z.object({
+  name: z.string().min(1, "El nombre es requerido"),
+  address: z.string().min(1, "La dirección es requerida"),
+  city: z.string().min(1, "La ciudad es requerida"),
+  postalCode: z.string().optional(),
+  province: z.string().optional(),
+  totalUnits: z.coerce.number().min(1, "Debe tener al menos 1 unidad"),
+});
+
+type CommunityFormValues = z.infer<typeof communityFormSchema>;
 
 export default function Comunidades() {
   const { data: user, isLoading: userLoading } = useUser();
@@ -18,10 +36,38 @@ export default function Comunidades() {
   const [searchAddress, setSearchAddress] = useState("");
   const { toast } = useToast();
 
-  // Redirect non-admin users
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [selectedCommunity, setSelectedCommunity] = useState<Community | null>(null);
+
   if (!userLoading && user?.role !== "admin_fincas") {
     return <Redirect to="/" />;
   }
+
+  const createForm = useForm<CommunityFormValues>({
+    resolver: zodResolver(communityFormSchema),
+    defaultValues: {
+      name: "",
+      address: "",
+      city: "",
+      postalCode: "",
+      province: "",
+      totalUnits: 1,
+    },
+  });
+
+  const editForm = useForm<CommunityFormValues>({
+    resolver: zodResolver(communityFormSchema),
+    defaultValues: {
+      name: "",
+      address: "",
+      city: "",
+      postalCode: "",
+      province: "",
+      totalUnits: 1,
+    },
+  });
 
   const selectCommunityMutation = useMutation({
     mutationFn: async (communityId: string) => {
@@ -35,6 +81,92 @@ export default function Comunidades() {
       });
     },
   });
+
+  const createCommunityMutation = useMutation({
+    mutationFn: async (data: CommunityFormValues) => {
+      return apiRequest("POST", "/api/communities", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/communities"] });
+      setIsCreateDialogOpen(false);
+      createForm.reset();
+      toast({
+        title: "Comunidad creada",
+        description: "La comunidad ha sido creada correctamente",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Error al crear comunidad",
+        description: error.message || "Ha ocurrido un error",
+      });
+    },
+  });
+
+  const updateCommunityMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: CommunityFormValues }) => {
+      return apiRequest("PATCH", `/api/communities/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/communities"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/current-community"] });
+      setIsEditDialogOpen(false);
+      setSelectedCommunity(null);
+      toast({
+        title: "Comunidad actualizada",
+        description: "Los datos de la comunidad han sido actualizados",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Error al actualizar comunidad",
+        description: error.message || "Ha ocurrido un error",
+      });
+    },
+  });
+
+  const deleteCommunityMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest("DELETE", `/api/communities/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/communities"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/current-community"] });
+      setIsDeleteDialogOpen(false);
+      setSelectedCommunity(null);
+      toast({
+        title: "Comunidad eliminada",
+        description: "La comunidad ha sido eliminada correctamente",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Error al eliminar comunidad",
+        description: error.message || "Ha ocurrido un error",
+      });
+    },
+  });
+
+  const handleEditClick = (community: Community) => {
+    setSelectedCommunity(community);
+    editForm.reset({
+      name: community.name,
+      address: community.address,
+      city: community.city,
+      postalCode: community.postalCode || "",
+      province: community.province || "",
+      totalUnits: community.totalUnits,
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleDeleteClick = (community: Community) => {
+    setSelectedCommunity(community);
+    setIsDeleteDialogOpen(true);
+  };
 
   const filteredCommunities = communities.filter((community) => {
     const matchesName = community.name.toLowerCase().includes(searchName.toLowerCase());
@@ -57,13 +189,22 @@ export default function Comunidades() {
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight" data-testid="text-page-title">
-          Comunidades
-        </h1>
-        <p className="text-muted-foreground mt-2">
-          Gestiona todas las comunidades de tu administración de fincas
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight" data-testid="text-page-title">
+            Comunidades
+          </h1>
+          <p className="text-muted-foreground mt-2">
+            Gestiona todas las comunidades de tu administración de fincas
+          </p>
+        </div>
+        <Button
+          onClick={() => setIsCreateDialogOpen(true)}
+          data-testid="button-create-community"
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          Nueva Comunidad
+        </Button>
       </div>
 
       <Card>
@@ -116,7 +257,9 @@ export default function Comunidades() {
           <div className="col-span-full text-center py-12">
             <Building2 className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
             <p className="text-muted-foreground">
-              No se encontraron comunidades con los criterios de búsqueda
+              {communities.length === 0
+                ? "No tienes comunidades. Crea tu primera comunidad para empezar."
+                : "No se encontraron comunidades con los criterios de búsqueda"}
             </p>
           </div>
         ) : (
@@ -143,6 +286,24 @@ export default function Comunidades() {
                         </Badge>
                       )}
                     </div>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleEditClick(community)}
+                        data-testid={`button-edit-${community.id}`}
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDeleteClick(community)}
+                        data-testid={`button-delete-${community.id}`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -153,6 +314,7 @@ export default function Comunidades() {
                         <p className="text-foreground">{community.address}</p>
                         <p className="text-muted-foreground">
                           {community.city}{community.postalCode ? `, ${community.postalCode}` : ""}
+                          {community.province ? ` (${community.province})` : ""}
                         </p>
                       </div>
                     </div>
@@ -180,6 +342,241 @@ export default function Comunidades() {
           })
         )}
       </div>
+
+      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Nueva Comunidad</DialogTitle>
+            <DialogDescription>
+              Añade una nueva comunidad a tu administración de fincas
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...createForm}>
+            <form onSubmit={createForm.handleSubmit((data) => createCommunityMutation.mutate(data))} className="space-y-4">
+              <FormField
+                control={createForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nombre de la comunidad</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ej: Comunidad Las Flores" data-testid="input-community-name" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={createForm.control}
+                name="address"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Dirección</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ej: Calle Mayor, 10" data-testid="input-community-address" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={createForm.control}
+                  name="city"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Ciudad</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Ej: Madrid" data-testid="input-community-city" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={createForm.control}
+                  name="postalCode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Código postal</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Ej: 28001" data-testid="input-community-postal" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <FormField
+                control={createForm.control}
+                name="province"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Provincia</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ej: Madrid" data-testid="input-community-province" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={createForm.control}
+                name="totalUnits"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Número de viviendas/unidades</FormLabel>
+                    <FormControl>
+                      <Input type="number" min="1" placeholder="Ej: 24" data-testid="input-community-units" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={createCommunityMutation.isPending} data-testid="button-submit-create">
+                  {createCommunityMutation.isPending ? "Creando..." : "Crear Comunidad"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar Comunidad</DialogTitle>
+            <DialogDescription>
+              Modifica los datos de la comunidad
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...editForm}>
+            <form onSubmit={editForm.handleSubmit((data) => {
+              if (selectedCommunity) {
+                updateCommunityMutation.mutate({ id: selectedCommunity.id, data });
+              }
+            })} className="space-y-4">
+              <FormField
+                control={editForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nombre de la comunidad</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ej: Comunidad Las Flores" data-testid="input-edit-name" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editForm.control}
+                name="address"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Dirección</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ej: Calle Mayor, 10" data-testid="input-edit-address" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={editForm.control}
+                  name="city"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Ciudad</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Ej: Madrid" data-testid="input-edit-city" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={editForm.control}
+                  name="postalCode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Código postal</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Ej: 28001" data-testid="input-edit-postal" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <FormField
+                control={editForm.control}
+                name="province"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Provincia</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ej: Madrid" data-testid="input-edit-province" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editForm.control}
+                name="totalUnits"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Número de viviendas/unidades</FormLabel>
+                    <FormControl>
+                      <Input type="number" min="1" placeholder="Ej: 24" data-testid="input-edit-units" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={updateCommunityMutation.isPending} data-testid="button-submit-edit">
+                  {updateCommunityMutation.isPending ? "Guardando..." : "Guardar Cambios"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar comunidad?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción no se puede deshacer. Se eliminará la comunidad "{selectedCommunity?.name}" y todos sus datos asociados (incidencias, documentos, acuerdos, etc.).
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (selectedCommunity) {
+                  deleteCommunityMutation.mutate(selectedCommunity.id);
+                }
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-delete"
+            >
+              {deleteCommunityMutation.isPending ? "Eliminando..." : "Eliminar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

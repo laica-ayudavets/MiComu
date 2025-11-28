@@ -37,6 +37,7 @@ import {
   updateMeetingAttendanceSchema,
   insertPropertyCompanySchema,
   insertCommunitySchema,
+  updateCommunitySchema,
   insertUserSchema,
   superAdminUpdateUserSchema,
   createAdminWithPasswordSchema,
@@ -412,6 +413,101 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     } catch (error) {
       console.error("Error fetching communities:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Create a new community (admin_fincas only)
+  app.post("/api/communities", requireRole("admin_fincas"), async (req: Request, res: Response) => {
+    try {
+      const user = req.user as User;
+      
+      if (!user.propertyCompanyId) {
+        return res.status(400).json({ error: "User is not associated with a property company" });
+      }
+
+      const validatedData = insertCommunitySchema.parse({
+        ...req.body,
+        propertyCompanyId: user.propertyCompanyId, // Always use the user's property company
+      });
+
+      const community = await storage.createCommunity(validatedData);
+      res.status(201).json(community);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation error", details: error.errors });
+      }
+      console.error("Error creating community:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Get a specific community by ID
+  app.get("/api/communities/:id", requireRole("admin_fincas"), async (req: Request, res: Response) => {
+    try {
+      const user = req.user as User;
+      const community = await storage.getCommunity(req.params.id);
+      
+      if (!community) {
+        return res.status(404).json({ error: "Community not found" });
+      }
+
+      // Verify the community belongs to the user's property company
+      if (community.propertyCompanyId !== user.propertyCompanyId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      res.json(community);
+    } catch (error) {
+      console.error("Error fetching community:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Update a community (admin_fincas only)
+  app.patch("/api/communities/:id", requireRole("admin_fincas"), async (req: Request, res: Response) => {
+    try {
+      const user = req.user as User;
+      
+      if (!user.propertyCompanyId) {
+        return res.status(400).json({ error: "User is not associated with a property company" });
+      }
+
+      const validatedData = updateCommunitySchema.parse(req.body);
+      const community = await storage.updateCommunity(req.params.id, user.propertyCompanyId, validatedData);
+      
+      if (!community) {
+        return res.status(404).json({ error: "Community not found or access denied" });
+      }
+
+      res.json(community);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation error", details: error.errors });
+      }
+      console.error("Error updating community:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Delete a community (admin_fincas only)
+  app.delete("/api/communities/:id", requireRole("admin_fincas"), async (req: Request, res: Response) => {
+    try {
+      const user = req.user as User;
+      
+      if (!user.propertyCompanyId) {
+        return res.status(400).json({ error: "User is not associated with a property company" });
+      }
+
+      const deleted = await storage.deleteCommunity(req.params.id, user.propertyCompanyId);
+      
+      if (!deleted) {
+        return res.status(404).json({ error: "Community not found or access denied" });
+      }
+
+      res.json({ success: true, message: "Community deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting community:", error);
       res.status(500).json({ error: "Internal server error" });
     }
   });
