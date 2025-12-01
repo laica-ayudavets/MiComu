@@ -38,12 +38,14 @@ export const communities = pgTable("communities", {
   province: text("province"),
   totalUnits: integer("total_units").notNull(), // Total number of units/apartments
   presidentId: varchar("president_id"), // Will be linked to users later
+  ghlBusinessId: text("ghl_business_id"), // GoHighLevel Business ID for CRM sync
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const insertCommunitySchema = createInsertSchema(communities).omit({
   id: true,
   createdAt: true,
+  ghlBusinessId: true, // Set programmatically during GHL sync
 });
 export const updateCommunitySchema = insertCommunitySchema.partial().omit({
   propertyCompanyId: true,
@@ -64,6 +66,7 @@ export const users = pgTable("users", {
   fullName: text("full_name"),
   unitNumber: text("unit_number"), // Apartment/unit number for residents
   active: boolean("active").notNull().default(true), // For soft-delete/disable users
+  ghlContactId: text("ghl_contact_id"), // GoHighLevel Contact ID for CRM sync
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -71,6 +74,7 @@ export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
   active: true, // Active is managed separately
+  ghlContactId: true, // Set programmatically during GHL sync
 });
 export const updateUserSchema = insertUserSchema.partial().omit({
   communityId: true,
