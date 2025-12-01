@@ -1002,6 +1002,89 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update a user (admin_fincas only for users in their communities)
+  app.patch("/api/users/:id", requireRole("admin_fincas"), async (req: Request, res: Response) => {
+    try {
+      const currentUser = req.user as User;
+      const targetUser = await storage.getUser(req.params.id);
+      
+      if (!targetUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Verify the user belongs to a community managed by this admin's property company
+      if (targetUser.communityId) {
+        const community = await storage.getCommunity(targetUser.communityId);
+        if (!community || community.propertyCompanyId !== currentUser.propertyCompanyId) {
+          return res.status(403).json({ error: "Access denied" });
+        }
+      }
+
+      const { fullName, email, unitNumber } = req.body;
+      const updateData: Record<string, unknown> = {};
+      if (fullName !== undefined) updateData.fullName = fullName;
+      if (email !== undefined) updateData.email = email.toLowerCase();
+      if (unitNumber !== undefined) updateData.unitNumber = unitNumber;
+
+      const updatedUser = await storage.updateUser(req.params.id, updateData);
+      if (!updatedUser) {
+        return res.status(500).json({ error: "Failed to update user" });
+      }
+
+      // Sync changes to GHL if configured and user has a GHL Contact ID
+      if (isGHLConfigured() && updatedUser.ghlContactId) {
+        updateGHLContact(updatedUser.ghlContactId, updateData).catch(err => {
+          console.error("[GHL] Failed to sync user update:", err);
+        });
+      }
+
+      const { password: _, ...sanitizedUser } = updatedUser;
+      res.json(sanitizedUser);
+    } catch (error) {
+      console.error("Error updating user:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Deactivate a user (marks as Ex-Residente in GHL, never deletes)
+  app.post("/api/users/:id/deactivate", requireRole("admin_fincas"), async (req: Request, res: Response) => {
+    try {
+      const currentUser = req.user as User;
+      const targetUser = await storage.getUser(req.params.id);
+      
+      if (!targetUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Verify the user belongs to a community managed by this admin's property company
+      if (targetUser.communityId) {
+        const community = await storage.getCommunity(targetUser.communityId);
+        if (!community || community.propertyCompanyId !== currentUser.propertyCompanyId) {
+          return res.status(403).json({ error: "Access denied" });
+        }
+      }
+
+      // Mark user as inactive in database
+      const updatedUser = await storage.updateUser(req.params.id, { active: false });
+      if (!updatedUser) {
+        return res.status(500).json({ error: "Failed to deactivate user" });
+      }
+
+      // Mark as Ex-Residente in GHL (never delete contacts)
+      if (isGHLConfigured() && targetUser.ghlContactId) {
+        deactivateGHLContact(targetUser.ghlContactId, targetUser.role).catch(err => {
+          console.error("[GHL] Failed to deactivate contact:", err);
+        });
+      }
+
+      const { password: _, ...sanitizedUser } = updatedUser;
+      res.json({ success: true, message: "User deactivated successfully", user: sanitizedUser });
+    } catch (error) {
+      console.error("Error deactivating user:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // Quota Types endpoints
   app.get("/api/quota-types", requireAuth, async (req: Request, res: Response) => {
     try {
@@ -1677,6 +1760,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
+
+      // Sync changes to GHL if configured and user has a GHL Contact ID
+      if (isGHLConfigured() && user.ghlContactId) {
+        updateGHLContact(user.ghlContactId, data).catch(err => {
+          console.error("[GHL] Failed to sync user update:", err);
+        });
+      }
+
       // Strip password from response
       const { password: _, ...sanitizedUser } = user;
       res.json(sanitizedUser);
@@ -1685,6 +1776,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Validation error", details: error.errors });
       }
       console.error("Error updating admin user:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Deactivate an admin user (marks as Ex-Residente in GHL)
+  app.post("/api/superadmin/admins/:id/deactivate", requireRole("superadmin"), async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUser(req.params.id);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Mark user as inactive in database
+      const updatedUser = await storage.updateUser(req.params.id, { active: false });
+      if (!updatedUser) {
+        return res.status(500).json({ error: "Failed to deactivate user" });
+      }
+
+      // Mark as Ex-Residente in GHL (never delete contacts)
+      if (isGHLConfigured() && user.ghlContactId) {
+        deactivateGHLContact(user.ghlContactId, user.role).catch(err => {
+          console.error("[GHL] Failed to deactivate contact:", err);
+        });
+      }
+
+      const { password: _, ...sanitizedUser } = updatedUser;
+      res.json({ success: true, message: "User deactivated successfully", user: sanitizedUser });
+    } catch (error) {
+      console.error("Error deactivating user:", error);
       res.status(500).json({ error: "Internal server error" });
     }
   });
