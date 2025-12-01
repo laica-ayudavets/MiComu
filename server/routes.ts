@@ -12,7 +12,7 @@ import {
   requireAuth,
   requireRole
 } from "./auth";
-import { createGHLBusiness, createGHLContact, isGHLConfigured } from "./ghl";
+import { createGHLBusiness, createGHLContact, updateGHLBusiness, archiveGHLBusiness, updateGHLContact, deactivateGHLContact, isGHLConfigured } from "./ghl";
 import { 
   insertIncidentSchema,
   updateIncidentSchema,
@@ -507,6 +507,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Community not found or access denied" });
       }
 
+      // Sync changes to GHL if configured and community has a GHL Business ID
+      if (isGHLConfigured() && community.ghlBusinessId) {
+        updateGHLBusiness(community.ghlBusinessId, validatedData).catch(err => {
+          console.error("[GHL] Failed to sync community update:", err);
+        });
+      }
+
       res.json(community);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -526,10 +533,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "User is not associated with a property company" });
       }
 
+      // Get community first to retrieve GHL Business ID before deletion
+      const community = await storage.getCommunity(req.params.id);
+      const ghlBusinessId = community?.ghlBusinessId;
+
       const deleted = await storage.deleteCommunity(req.params.id, user.propertyCompanyId);
       
       if (!deleted) {
         return res.status(404).json({ error: "Community not found or access denied" });
+      }
+
+      // Archive the business in GHL (mark as inactive, don't delete)
+      if (isGHLConfigured() && ghlBusinessId) {
+        archiveGHLBusiness(ghlBusinessId).catch(err => {
+          console.error("[GHL] Failed to archive business:", err);
+        });
       }
 
       res.json({ success: true, message: "Community deleted successfully" });

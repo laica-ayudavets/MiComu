@@ -219,6 +219,81 @@ export async function updateGHLContact(
   }
 }
 
+export async function archiveGHLBusiness(ghlBusinessId: string): Promise<boolean> {
+  const config = getGHLConfig();
+  if (!config) return false;
+
+  try {
+    const payload = {
+      tags: ["Archivado"],
+    };
+
+    console.log(`[GHL] Archiving business: ${ghlBusinessId}`);
+
+    const response = await fetch(`${GHL_API_BASE}/businesses/${ghlBusinessId}`, {
+      method: "PUT",
+      headers: getHeaders(config.apiKey),
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json() as GHLError;
+      console.error(`[GHL] Failed to archive business: ${response.status}`, errorData);
+      return false;
+    }
+
+    console.log(`[GHL] Business archived successfully: ${ghlBusinessId}`);
+    return true;
+  } catch (error) {
+    console.error("[GHL] Error archiving business:", error);
+    return false;
+  }
+}
+
+export async function deactivateGHLContact(
+  ghlContactId: string,
+  previousRole: string
+): Promise<boolean> {
+  const config = getGHLConfig();
+  if (!config) return false;
+
+  try {
+    const roleTagMap: Record<string, string> = {
+      vecino: "Resident",
+      presidente: "President",
+      admin_fincas: "Property Manager",
+      superadmin: "Super Admin",
+    };
+
+    const previousTag = roleTagMap[previousRole] || previousRole;
+
+    const payload = {
+      tags: ["Ex-Residente"],
+      tagsToRemove: [previousTag],
+    };
+
+    console.log(`[GHL] Deactivating contact: ${ghlContactId} (was ${previousRole})`);
+
+    const response = await fetch(`${GHL_API_BASE}/contacts/${ghlContactId}`, {
+      method: "PUT",
+      headers: getHeaders(config.apiKey),
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json() as GHLError;
+      console.error(`[GHL] Failed to deactivate contact: ${response.status}`, errorData);
+      return false;
+    }
+
+    console.log(`[GHL] Contact deactivated successfully: ${ghlContactId}`);
+    return true;
+  } catch (error) {
+    console.error("[GHL] Error deactivating contact:", error);
+    return false;
+  }
+}
+
 export function isGHLConfigured(): boolean {
   return getGHLConfig() !== null;
 }
