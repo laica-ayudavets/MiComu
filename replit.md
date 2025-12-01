@@ -65,9 +65,48 @@ The application implements **Spanish-only localization** using direct string rep
 -   All form labels, buttons, validation messages, and toast notifications in Spanish
 -   Maintained technical accuracy while ensuring clarity for non-technical users
 
+# GoHighLevel CRM Integration
+
+The platform integrates with GoHighLevel API 2.0 to automatically sync community and user data to the CRM.
+
+## Configuration
+
+Two environment secrets are required:
+-   `GHL_API_KEY`: Private integration token for API authentication
+-   `GHL_LOCATION_ID`: Sub-account/location ID where data is created
+
+## Sync Behavior
+
+**Communities → GHL Businesses**:
+-   When a new community is created, it's automatically synced as a Business record in GHL
+-   Synced fields: name, address, city, state (province), postalCode, country (ES)
+-   The GHL Business ID is stored in `communities.ghlBusinessId` for future reference
+-   Sync is asynchronous and non-blocking (doesn't slow down community creation)
+
+**Users → GHL Contacts**:
+-   When a new user is registered, they're synced as a Contact in GHL
+-   Synced fields: firstName, lastName, email, tags (based on role)
+-   If user's community has a `ghlBusinessId`, the contact is linked via `companyId`
+-   The GHL Contact ID is stored in `users.ghlContactId`
+-   Sync is asynchronous and non-blocking
+
+## Implementation Files
+
+-   `server/ghl.ts`: GHL API service with create/update functions
+-   `server/routes.ts`: Integration points in community/user creation endpoints
+-   `server/storage.ts`: `updateCommunityGHLId()` and `updateUserGHLId()` functions
+-   `shared/schema.ts`: `ghlBusinessId` and `ghlContactId` columns
+
+## Error Handling
+
+-   GHL sync failures are logged but don't block the main application flow
+-   If GHL credentials are not configured, sync is silently skipped
+-   Failed syncs can be retried manually or through future batch sync functionality
+
 # External Dependencies
 
 -   **Database**: Neon Serverless PostgreSQL
+-   **CRM Integration**: GoHighLevel API 2.0
 -   **UI Components**: Radix UI, Shadcn/ui, Lucide React (icons)
 -   **Form Handling**: React Hook Form, Zod, Hookform Resolvers
 -   **Date Management**: Date-fns

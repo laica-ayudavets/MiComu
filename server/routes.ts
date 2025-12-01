@@ -295,6 +295,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const user = await storage.createUser(userData);
 
+      // Sync to GoHighLevel CRM (async, non-blocking)
+      if (isGHLConfigured()) {
+        const community = communityId ? await storage.getCommunity(communityId) : null;
+        createGHLContact(user, community || null).then(async (ghlContactId) => {
+          if (ghlContactId) {
+            await storage.updateUserGHLId(user.id, ghlContactId);
+            console.log(`[GHL] User ${user.id} synced with contact ${ghlContactId}`);
+          }
+        }).catch((err) => {
+          console.error("[GHL] Failed to sync user:", err);
+        });
+      }
+
       // Remove password from response
       const { password: _, ...userWithoutPassword } = user;
       

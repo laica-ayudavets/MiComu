@@ -53,6 +53,7 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUserPassword(id: string, passwordHash: string): Promise<void>;
+  updateUserGHLId(id: string, ghlContactId: string): Promise<void>; // GHL sync
   getAllUsers(): Promise<User[]>; // Superadmin: all users across system
   getAdminFincasUsers(propertyCompanyId?: string, includeInactive?: boolean): Promise<User[]>; // Superadmin: filter by company or get all, optionally include inactive
   updateUser(id: string, updates: SuperAdminUpdateUser): Promise<User | undefined>; // Superadmin: safe update
@@ -198,6 +199,12 @@ export class DbStorage implements IStorage {
   async updateUserPassword(id: string, passwordHash: string): Promise<void> {
     await db.update(users)
       .set({ password: passwordHash })
+      .where(eq(users.id, id));
+  }
+
+  async updateUserGHLId(id: string, ghlContactId: string): Promise<void> {
+    await db.update(users)
+      .set({ ghlContactId })
       .where(eq(users.id, id));
   }
 

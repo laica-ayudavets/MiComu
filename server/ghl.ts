@@ -53,25 +53,16 @@ export async function createGHLBusiness(community: Community): Promise<string | 
   if (!config) return null;
 
   try {
-    const payload = {
+    const payload: Record<string, unknown> = {
       locationId: config.locationId,
       name: community.name,
-      address: community.address || undefined,
-      city: community.city || undefined,
-      state: community.province || undefined,
-      postalCode: community.postalCode || undefined,
       country: "ES",
-      customFields: [
-        {
-          key: "total_units",
-          value: String(community.totalUnits || 0),
-        },
-        {
-          key: "internal_community_id",
-          value: community.id,
-        },
-      ],
     };
+
+    if (community.address) payload.address = community.address;
+    if (community.city) payload.city = community.city;
+    if (community.province) payload.state = community.province;
+    if (community.postalCode) payload.postalCode = community.postalCode;
 
     console.log(`[GHL] Creating business for community: ${community.name}`);
 
@@ -121,27 +112,7 @@ export async function createGHLContact(
       lastName,
       email: user.email,
       tags: [roleMap[user.role] || user.role],
-      customFields: [
-        {
-          key: "internal_user_id",
-          value: user.id,
-        },
-        {
-          key: "user_role",
-          value: user.role,
-        },
-      ],
     };
-
-    if (user.unitNumber) {
-      payload.customFields = [
-        ...(payload.customFields as Array<{ key: string; value: string }>),
-        {
-          key: "unit_number",
-          value: user.unitNumber,
-        },
-      ];
-    }
 
     if (community?.ghlBusinessId) {
       payload.companyId = community.ghlBusinessId;
