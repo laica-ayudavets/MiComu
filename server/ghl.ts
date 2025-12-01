@@ -219,13 +219,17 @@ export async function updateGHLContact(
   }
 }
 
-export async function archiveGHLBusiness(ghlBusinessId: string): Promise<boolean> {
+export async function archiveGHLBusiness(ghlBusinessId: string, communityName?: string): Promise<boolean> {
   const config = getGHLConfig();
   if (!config) return false;
 
   try {
+    const archivedName = communityName 
+      ? `[ARCHIVADO] ${communityName}` 
+      : `[ARCHIVADO] Community`;
+    
     const payload = {
-      tags: ["Archivado"],
+      name: archivedName,
     };
 
     console.log(`[GHL] Archiving business: ${ghlBusinessId}`);

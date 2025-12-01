@@ -78,22 +78,40 @@ Two environment secrets are required:
 ## Sync Behavior
 
 **Communities → GHL Businesses**:
--   When a new community is created, it's automatically synced as a Business record in GHL
+-   **Create**: When a new community is created, it's automatically synced as a Business record in GHL
+-   **Update**: When community details change (name, address, city, province, postalCode), changes sync to GHL
+-   **Delete**: When a community is deleted, the GHL Business is archived by renaming to "[ARCHIVADO] CommunityName" (not deleted)
 -   Synced fields: name, address, city, state (province), postalCode, country (ES)
 -   The GHL Business ID is stored in `communities.ghlBusinessId` for future reference
--   Sync is asynchronous and non-blocking (doesn't slow down community creation)
+-   All sync operations are asynchronous and non-blocking
 
 **Users → GHL Contacts**:
--   When a new user is registered, they're synced as a Contact in GHL
+-   **Create**: When a new user is registered, they're synced as a Contact in GHL
+-   **Update**: When user details change (fullName, email), changes sync to GHL
+-   **Deactivate**: When a user is deactivated, the GHL Contact is tagged "Ex-Residente" (contacts are never deleted)
 -   Synced fields: firstName, lastName, email, tags (based on role)
 -   If user's community has a `ghlBusinessId`, the contact is linked via `companyId`
 -   The GHL Contact ID is stored in `users.ghlContactId`
--   Sync is asynchronous and non-blocking
+-   All sync operations are asynchronous and non-blocking
+
+## API Endpoints
+
+**Community GHL Sync**:
+-   `POST /api/communities` → Creates GHL Business
+-   `PATCH /api/communities/:id` → Updates GHL Business
+-   `DELETE /api/communities/:id` → Archives GHL Business (prefixes name with "[ARCHIVADO]")
+
+**User GHL Sync**:
+-   `POST /api/auth/register` → Creates GHL Contact
+-   `PATCH /api/users/:id` → Updates GHL Contact (admin_fincas only, community users)
+-   `PATCH /api/superadmin/admins/:id` → Updates GHL Contact (superadmin only, admin users)
+-   `POST /api/users/:id/deactivate` → Tags GHL Contact as "Ex-Residente" (admin_fincas only)
+-   `POST /api/superadmin/admins/:id/deactivate` → Tags GHL Contact as "Ex-Residente" (superadmin only)
 
 ## Implementation Files
 
--   `server/ghl.ts`: GHL API service with create/update functions
--   `server/routes.ts`: Integration points in community/user creation endpoints
+-   `server/ghl.ts`: GHL API service with create/update/archive/deactivate functions
+-   `server/routes.ts`: Integration points in all CRUD endpoints
 -   `server/storage.ts`: `updateCommunityGHLId()` and `updateUserGHLId()` functions
 -   `shared/schema.ts`: `ghlBusinessId` and `ghlContactId` columns
 
@@ -102,6 +120,7 @@ Two environment secrets are required:
 -   GHL sync failures are logged but don't block the main application flow
 -   If GHL credentials are not configured, sync is silently skipped
 -   Failed syncs can be retried manually or through future batch sync functionality
+-   All sync is performed with proper authorization checks (community ownership verification)
 
 # External Dependencies
 

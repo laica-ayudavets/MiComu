@@ -545,7 +545,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Archive the business in GHL (mark as inactive, don't delete)
       if (isGHLConfigured() && ghlBusinessId) {
-        archiveGHLBusiness(ghlBusinessId).catch(err => {
+        archiveGHLBusiness(ghlBusinessId, community?.name).catch(err => {
           console.error("[GHL] Failed to archive business:", err);
         });
       }
@@ -1012,12 +1012,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "User not found" });
       }
 
+      // Users without a communityId cannot be managed by admin_fincas
+      if (!targetUser.communityId) {
+        return res.status(403).json({ error: "Access denied - user is not a community member" });
+      }
+
       // Verify the user belongs to a community managed by this admin's property company
-      if (targetUser.communityId) {
-        const community = await storage.getCommunity(targetUser.communityId);
-        if (!community || community.propertyCompanyId !== currentUser.propertyCompanyId) {
-          return res.status(403).json({ error: "Access denied" });
-        }
+      const community = await storage.getCommunity(targetUser.communityId);
+      if (!community || community.propertyCompanyId !== currentUser.propertyCompanyId) {
+        return res.status(403).json({ error: "Access denied" });
       }
 
       const { fullName, email, unitNumber } = req.body;
@@ -1056,12 +1059,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "User not found" });
       }
 
+      // Users without a communityId cannot be managed by admin_fincas
+      if (!targetUser.communityId) {
+        return res.status(403).json({ error: "Access denied - user is not a community member" });
+      }
+
       // Verify the user belongs to a community managed by this admin's property company
-      if (targetUser.communityId) {
-        const community = await storage.getCommunity(targetUser.communityId);
-        if (!community || community.propertyCompanyId !== currentUser.propertyCompanyId) {
-          return res.status(403).json({ error: "Access denied" });
-        }
+      const community = await storage.getCommunity(targetUser.communityId);
+      if (!community || community.propertyCompanyId !== currentUser.propertyCompanyId) {
+        return res.status(403).json({ error: "Access denied" });
       }
 
       // Mark user as inactive in database
