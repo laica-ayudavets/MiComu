@@ -75,6 +75,13 @@ export default function Comunidades() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/auth/current-community"] });
+      // Invalidate all community-scoped data queries when switching communities
+      queryClient.invalidateQueries({ queryKey: ["/api/incidents"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/agreements"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/derramas"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/quotas"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/meetings"] });
       toast({
         title: "Comunidad seleccionada",
         description: "La comunidad ha sido seleccionada correctamente",
@@ -84,15 +91,18 @@ export default function Comunidades() {
 
   const createCommunityMutation = useMutation({
     mutationFn: async (data: CommunityFormValues) => {
-      return apiRequest("POST", "/api/communities", data);
+      const res = await apiRequest("POST", "/api/communities", data);
+      return res.json() as Promise<Community>;
     },
-    onSuccess: () => {
+    onSuccess: (newCommunity: Community) => {
       queryClient.invalidateQueries({ queryKey: ["/api/auth/communities"] });
+      // Automatically select the newly created community
+      selectCommunityMutation.mutate(newCommunity.id);
       setIsCreateDialogOpen(false);
       createForm.reset();
       toast({
         title: "Comunidad creada",
-        description: "La comunidad ha sido creada correctamente",
+        description: "La comunidad ha sido creada correctamente y seleccionada",
       });
     },
     onError: (error: any) => {
@@ -106,7 +116,8 @@ export default function Comunidades() {
 
   const updateCommunityMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: CommunityFormValues }) => {
-      return apiRequest("PATCH", `/api/communities/${id}`, data);
+      const res = await apiRequest("PATCH", `/api/communities/${id}`, data);
+      return res.json() as Promise<Community>;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/auth/communities"] });
@@ -129,7 +140,8 @@ export default function Comunidades() {
 
   const deleteCommunityMutation = useMutation({
     mutationFn: async (id: string) => {
-      return apiRequest("DELETE", `/api/communities/${id}`);
+      const res = await apiRequest("DELETE", `/api/communities/${id}`);
+      return res.json() as Promise<{ success: boolean }>;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/auth/communities"] });
