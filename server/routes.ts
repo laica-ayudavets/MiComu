@@ -12,6 +12,7 @@ import {
   requireAuth,
   requireRole
 } from "./auth";
+import { createGHLBusiness, createGHLContact, isGHLConfigured } from "./ghl";
 import { 
   insertIncidentSchema,
   updateIncidentSchema,
@@ -432,6 +433,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const community = await storage.createCommunity(validatedData);
+
+      // Sync to GoHighLevel CRM (async, non-blocking)
+      if (isGHLConfigured()) {
+        createGHLBusiness(community).then(async (ghlBusinessId) => {
+          if (ghlBusinessId) {
+            await storage.updateCommunityGHLId(community.id, ghlBusinessId);
+            console.log(`[GHL] Community ${community.id} synced with business ${ghlBusinessId}`);
+          }
+        }).catch((err) => {
+          console.error("[GHL] Failed to sync community:", err);
+        });
+      }
+
       res.status(201).json(community);
     } catch (error) {
       if (error instanceof z.ZodError) {
