@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   Settings,
   CalendarDays,
+  LogOut,
 } from "lucide-react";
 import {
   Sidebar,
@@ -24,6 +25,8 @@ import {
 } from "@/components/ui/sidebar";
 import { Link, useLocation } from "wouter";
 import { useCurrentCommunity, useUser } from "@/hooks/use-auth";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 const menuItems = [
   {
@@ -77,11 +80,26 @@ const adminMenuItems = [
 ];
 
 export function AppSidebar() {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const { data: currentCommunity } = useCurrentCommunity();
   const { data: user } = useUser();
+  const { toast } = useToast();
   
   const isAdminFincas = user?.role === "admin_fincas";
+
+  const handleLogout = async () => {
+    try {
+      await apiRequest("POST", "/api/auth/logout");
+      queryClient.clear();
+      setLocation("/login");
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "No se pudo cerrar la sesión",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <Sidebar>
@@ -136,12 +154,22 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter className="p-4 border-t">
-        <Link href="/configuracion">
-          <SidebarMenuButton data-testid="link-configuracion">
-            <Settings className="w-4 h-4" />
-            <span>Configuración</span>
-          </SidebarMenuButton>
-        </Link>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <Link href="/configuracion">
+              <SidebarMenuButton data-testid="link-configuracion">
+                <Settings className="w-4 h-4" />
+                <span>Configuración</span>
+              </SidebarMenuButton>
+            </Link>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton onClick={handleLogout} data-testid="button-logout">
+              <LogOut className="w-4 h-4" />
+              <span>Cerrar Sesión</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarFooter>
     </Sidebar>
   );
