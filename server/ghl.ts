@@ -48,7 +48,7 @@ function getHeaders(apiKey: string) {
   };
 }
 
-export async function createGHLBusiness(community: Community): Promise<string | null> {
+export async function createGHLBusiness(community: Community, residentCount?: number): Promise<string | null> {
   const config = getGHLConfig();
   if (!config) return null;
 
@@ -63,6 +63,11 @@ export async function createGHLBusiness(community: Community): Promise<string | 
     if (community.city) payload.city = community.city;
     if (community.province) payload.state = community.province;
     if (community.postalCode) payload.postalCode = community.postalCode;
+    
+    // Add description with resident count
+    if (residentCount !== undefined) {
+      payload.description = `Residentes: ${residentCount}`;
+    }
 
     console.log(`[GHL] Creating business for community: ${community.name}`);
 
@@ -154,7 +159,8 @@ export async function createGHLContact(
 
 export async function updateGHLBusiness(
   ghlBusinessId: string,
-  community: Partial<Community>
+  community: Partial<Community>,
+  residentCount?: number
 ): Promise<boolean> {
   const config = getGHLConfig();
   if (!config) return false;
@@ -167,6 +173,11 @@ export async function updateGHLBusiness(
     if (community.city) payload.city = community.city;
     if (community.province) payload.state = community.province;
     if (community.postalCode) payload.postalCode = community.postalCode;
+    
+    // Update description with resident count
+    if (residentCount !== undefined) {
+      payload.description = `Residentes: ${residentCount}`;
+    }
 
     console.log(`[GHL] Updating business: ${ghlBusinessId}`);
 

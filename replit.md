@@ -95,7 +95,12 @@ Two environment secrets are required:
 -   **Create**: When a new community is created, it's automatically synced as a Business record in GHL
 -   **Update**: When community details change (name, address, city, province, postalCode), changes sync to GHL
 -   **Delete**: When a community is deleted, the GHL Business is archived by renaming to "[ARCHIVADO] CommunityName" (not deleted)
--   Synced fields: name, address, city, state (province), postalCode, country (ES)
+-   **Resident Count**: The business description is automatically updated with "Residentes: X" whenever:
+    -   A new community is created (starts at 0)
+    -   A user is created, deactivated, or reactivated in the community
+    -   A user is transferred between communities (both old and new community counts are updated)
+    -   Community details are updated
+-   Synced fields: name, address, city, state (province), postalCode, country (ES), description (resident count)
 -   The GHL Business ID is stored in `communities.ghlBusinessId` for future reference
 -   All sync operations are asynchronous and non-blocking
 

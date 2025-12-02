@@ -73,6 +73,7 @@ export interface IStorage {
   updateCommunity(id: string, propertyCompanyId: string, updates: Partial<InsertCommunity>): Promise<Community | undefined>;
   deleteCommunity(id: string, propertyCompanyId: string): Promise<boolean>;
   updateCommunityGHLId(id: string, ghlBusinessId: string): Promise<void>; // GHL sync
+  countResidentsByCommunity(communityId: string): Promise<number>; // Count active residents
   
   // Incident management (community-scoped)
   getIncidents(communityId: string): Promise<Incident[]>;
@@ -320,6 +321,16 @@ export class DbStorage implements IStorage {
     await db.update(communities)
       .set({ ghlBusinessId })
       .where(eq(communities.id, id));
+  }
+
+  async countResidentsByCommunity(communityId: string): Promise<number> {
+    const result = await db.select({ count: sql<number>`count(*)` })
+      .from(users)
+      .where(and(
+        eq(users.communityId, communityId),
+        eq(users.active, true)
+      ));
+    return Number(result[0]?.count || 0);
   }
 
   // Incident methods (now community-scoped)

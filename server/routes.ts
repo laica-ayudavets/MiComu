@@ -311,6 +311,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }).catch((err) => {
           console.error("[GHL] Failed to sync user:", err);
         });
+        
+        // Update community's GHL business with new resident count
+        if (community && community.ghlBusinessId) {
+          storage.countResidentsByCommunity(community.id).then(residentCount => {
+            updateGHLBusiness(community.ghlBusinessId!, {}, residentCount).catch(err => {
+              console.error("[GHL] Failed to update community resident count:", err);
+            });
+          }).catch(err => {
+            console.error("[GHL] Failed to get resident count:", err);
+          });
+        }
       }
 
       // Remove password from response
@@ -454,7 +465,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Sync to GoHighLevel CRM (async, non-blocking)
       if (isGHLConfigured()) {
-        createGHLBusiness(community).then(async (ghlBusinessId) => {
+        // New community starts with 0 residents
+        createGHLBusiness(community, 0).then(async (ghlBusinessId) => {
           if (ghlBusinessId) {
             await storage.updateCommunityGHLId(community.id, ghlBusinessId);
             console.log(`[GHL] Community ${community.id} synced with business ${ghlBusinessId}`);
@@ -514,8 +526,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Sync changes to GHL if configured and community has a GHL Business ID
       if (isGHLConfigured() && community.ghlBusinessId) {
-        updateGHLBusiness(community.ghlBusinessId, validatedData).catch(err => {
-          console.error("[GHL] Failed to sync community update:", err);
+        // Get current resident count for description
+        storage.countResidentsByCommunity(community.id).then(residentCount => {
+          updateGHLBusiness(community.ghlBusinessId!, validatedData, residentCount).catch(err => {
+            console.error("[GHL] Failed to sync community update:", err);
+          });
+        }).catch(err => {
+          console.error("[GHL] Failed to get resident count:", err);
+          // Still sync without resident count
+          updateGHLBusiness(community.ghlBusinessId!, validatedData).catch(err => {
+            console.error("[GHL] Failed to sync community update:", err);
+          });
         });
       }
 
@@ -1106,6 +1127,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (ghlContactId) {
           await storage.updateUserGHLId(newUser.id, ghlContactId);
         }
+        
+        // Update community's GHL business with new resident count
+        if (community.ghlBusinessId) {
+          storage.countResidentsByCommunity(community.id).then(residentCount => {
+            updateGHLBusiness(community.ghlBusinessId!, {}, residentCount).catch(err => {
+              console.error("[GHL] Failed to update community resident count:", err);
+            });
+          }).catch(err => {
+            console.error("[GHL] Failed to get resident count:", err);
+          });
+        }
       }
 
       const { password: _, ...sanitizedUser } = newUser;
@@ -1214,6 +1246,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         updateGHLContact(updatedUser.ghlContactId, updateData, communityForGHL).catch(err => {
           console.error("[GHL] Failed to sync user update:", err);
         });
+        
+        // If user was transferred, update both old and new community resident counts
+        if (newCommunity) {
+          // Update old community's resident count
+          if (community.ghlBusinessId) {
+            storage.countResidentsByCommunity(community.id).then(residentCount => {
+              updateGHLBusiness(community.ghlBusinessId!, {}, residentCount).catch(err => {
+                console.error("[GHL] Failed to update old community resident count:", err);
+              });
+            }).catch(err => {
+              console.error("[GHL] Failed to get old community resident count:", err);
+            });
+          }
+          // Update new community's resident count
+          if (newCommunity.ghlBusinessId) {
+            storage.countResidentsByCommunity(newCommunity.id).then(residentCount => {
+              updateGHLBusiness(newCommunity.ghlBusinessId!, {}, residentCount).catch(err => {
+                console.error("[GHL] Failed to update new community resident count:", err);
+              });
+            }).catch(err => {
+              console.error("[GHL] Failed to get new community resident count:", err);
+            });
+          }
+        }
       }
 
       const { password: _, ...sanitizedUser } = updatedUser;
@@ -1292,6 +1348,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         reactivateGHLContact(targetUser.ghlContactId, targetUser.role).catch(err => {
           console.error("[GHL] Failed to reactivate contact:", err);
         });
+        
+        // Update community's GHL business with new resident count
+        if (community.ghlBusinessId) {
+          storage.countResidentsByCommunity(community.id).then(residentCount => {
+            updateGHLBusiness(community.ghlBusinessId!, {}, residentCount).catch(err => {
+              console.error("[GHL] Failed to update community resident count:", err);
+            });
+          }).catch(err => {
+            console.error("[GHL] Failed to get resident count:", err);
+          });
+        }
       }
 
       const { password: _, ...sanitizedUser } = updatedUser;
@@ -1334,6 +1401,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         deactivateGHLContact(targetUser.ghlContactId, targetUser.role).catch(err => {
           console.error("[GHL] Failed to deactivate contact:", err);
         });
+        
+        // Update community's GHL business with new resident count
+        if (community.ghlBusinessId) {
+          storage.countResidentsByCommunity(community.id).then(residentCount => {
+            updateGHLBusiness(community.ghlBusinessId!, {}, residentCount).catch(err => {
+              console.error("[GHL] Failed to update community resident count:", err);
+            });
+          }).catch(err => {
+            console.error("[GHL] Failed to get resident count:", err);
+          });
+        }
       }
 
       const { password: _, ...sanitizedUser } = updatedUser;
