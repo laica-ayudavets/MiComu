@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/hooks/use-auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -34,6 +35,7 @@ const userFormSchema = z.object({
   lastName: z.string().min(2, "El apellido debe tener al menos 2 caracteres"),
   email: z.string().email("Correo electrónico inválido"),
   phone: z.string().optional(),
+  dateOfBirth: z.string().optional(),
   unitNumber: z.string().optional(),
   role: z.enum(["vecino", "presidente"]),
   communityId: z.string().min(1, "Selecciona una comunidad"),
@@ -46,6 +48,7 @@ const editUserFormSchema = z.object({
   lastName: z.string().min(2, "El apellido debe tener al menos 2 caracteres"),
   email: z.string().email("Correo electrónico inválido"),
   phone: z.string().optional(),
+  dateOfBirth: z.string().optional(),
   unitNumber: z.string().optional(),
   role: z.enum(["vecino", "presidente"]),
   communityId: z.string().optional(), // For community transfer
@@ -91,6 +94,7 @@ export default function Vecinos() {
       lastName: "",
       email: "",
       phone: "",
+      dateOfBirth: "",
       unitNumber: "",
       role: "vecino",
       communityId: "",
@@ -106,6 +110,7 @@ export default function Vecinos() {
       lastName: editingUser.lastName || "",
       email: editingUser.email,
       phone: editingUser.phone || "",
+      dateOfBirth: editingUser.dateOfBirth || "",
       unitNumber: editingUser.unitNumber || "",
       role: editingUser.role as "vecino" | "presidente",
       communityId: editingUser.communityId || "",
@@ -114,6 +119,7 @@ export default function Vecinos() {
       lastName: "",
       email: "",
       phone: "",
+      dateOfBirth: "",
       unitNumber: "",
       role: "vecino",
       communityId: "",
@@ -318,98 +324,114 @@ export default function Vecinos() {
               Añadir Vecino
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-md max-h-[90vh]">
             <DialogHeader>
               <DialogTitle>Nuevo Vecino</DialogTitle>
               <DialogDescription>
                 Registra un nuevo residente en una de tus comunidades
               </DialogDescription>
             </DialogHeader>
-            <Form {...addForm}>
-              <form onSubmit={addForm.handleSubmit(onAddSubmit)} className="space-y-4">
-                <FormField
-                  control={addForm.control}
-                  name="communityId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Comunidad</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-add-community">
-                            <SelectValue placeholder="Selecciona una comunidad" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {communities?.map(community => (
-                            <SelectItem key={community.id} value={community.id} data-testid={`option-community-${community.id}`}>
-                              {community.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="grid grid-cols-2 gap-4">
+            <ScrollArea className="max-h-[60vh] pr-4">
+              <Form {...addForm}>
+                <form onSubmit={addForm.handleSubmit(onAddSubmit)} className="space-y-4">
                   <FormField
                     control={addForm.control}
-                    name="firstName"
+                    name="communityId"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Nombre</FormLabel>
+                        <FormLabel>Comunidad</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-add-community">
+                              <SelectValue placeholder="Selecciona una comunidad" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {communities?.map(community => (
+                              <SelectItem key={community.id} value={community.id} data-testid={`option-community-${community.id}`}>
+                                {community.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={addForm.control}
+                      name="firstName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Nombre</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="Juan" data-testid="input-add-firstname" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={addForm.control}
+                      name="lastName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Apellidos</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="García López" data-testid="input-add-lastname" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <FormField
+                    control={addForm.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Correo Electrónico</FormLabel>
                         <FormControl>
-                          <Input {...field} placeholder="Juan" data-testid="input-add-firstname" />
+                          <Input {...field} type="email" placeholder="juan@email.com" data-testid="input-add-email" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
 
-                  <FormField
-                    control={addForm.control}
-                    name="lastName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Apellidos</FormLabel>
-                        <FormControl>
-                          <Input {...field} placeholder="García López" data-testid="input-add-lastname" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={addForm.control}
+                      name="phone"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Teléfono</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="+34 600..." data-testid="input-add-phone" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                <FormField
-                  control={addForm.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Correo Electrónico</FormLabel>
-                      <FormControl>
-                        <Input {...field} type="email" placeholder="juan@email.com" data-testid="input-add-email" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={addForm.control}
-                    name="phone"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Teléfono</FormLabel>
-                        <FormControl>
-                          <Input {...field} placeholder="+34 600..." data-testid="input-add-phone" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                    <FormField
+                      control={addForm.control}
+                      name="dateOfBirth"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Fecha de Nacimiento</FormLabel>
+                          <FormControl>
+                            <Input {...field} type="date" data-testid="input-add-dob" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
 
                   <FormField
                     control={addForm.control}
@@ -424,85 +446,85 @@ export default function Vecinos() {
                       </FormItem>
                     )}
                   />
-                </div>
 
-                <FormField
-                  control={addForm.control}
-                  name="role"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Rol</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-role">
-                            <SelectValue placeholder="Selecciona un rol" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="vecino">Vecino</SelectItem>
-                          <SelectItem value="presidente">Presidente</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="border-t pt-4">
-                  <p className="text-sm font-medium mb-3">Credenciales de acceso</p>
-                  
                   <FormField
                     control={addForm.control}
-                    name="username"
+                    name="role"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Nombre de Usuario</FormLabel>
-                        <FormControl>
-                          <Input {...field} placeholder="juangarcia" data-testid="input-add-username" />
-                        </FormControl>
+                        <FormLabel>Rol</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-role">
+                              <SelectValue placeholder="Selecciona un rol" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="vecino">Vecino</SelectItem>
+                            <SelectItem value="presidente">Presidente</SelectItem>
+                          </SelectContent>
+                        </Select>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
 
-                  <FormField
-                    control={addForm.control}
-                    name="password"
-                    render={({ field }) => (
-                      <FormItem className="mt-3">
-                        <FormLabel>Contraseña</FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <Input 
-                              {...field} 
-                              type={showPassword ? "text" : "password"}
-                              placeholder="Contraseña segura" 
-                              data-testid="input-add-password"
-                            />
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="absolute right-0 top-0 h-full"
-                              onClick={() => setShowPassword(!showPassword)}
-                            >
-                              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                            </Button>
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
+                  <div className="border-t pt-4">
+                    <p className="text-sm font-medium mb-3">Credenciales de acceso</p>
+                    
+                    <FormField
+                      control={addForm.control}
+                      name="username"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Nombre de Usuario</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="juangarcia" data-testid="input-add-username" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                <DialogFooter>
-                  <Button type="submit" disabled={createUserMutation.isPending} data-testid="button-submit-add">
-                    {createUserMutation.isPending ? "Creando..." : "Crear Vecino"}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </Form>
+                    <FormField
+                      control={addForm.control}
+                      name="password"
+                      render={({ field }) => (
+                        <FormItem className="mt-3">
+                          <FormLabel>Contraseña</FormLabel>
+                          <FormControl>
+                            <div className="relative">
+                              <Input 
+                                {...field} 
+                                type={showPassword ? "text" : "password"}
+                                placeholder="Contraseña segura" 
+                                data-testid="input-add-password"
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="absolute right-0 top-0 h-full"
+                                onClick={() => setShowPassword(!showPassword)}
+                              >
+                                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                              </Button>
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <DialogFooter className="pt-4">
+                    <Button type="submit" disabled={createUserMutation.isPending} data-testid="button-submit-add">
+                      {createUserMutation.isPending ? "Creando..." : "Crear Vecino"}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </Form>
+            </ScrollArea>
           </DialogContent>
         </Dialog>
       </div>
@@ -632,98 +654,114 @@ export default function Vecinos() {
       </Card>
 
       <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>Editar Vecino</DialogTitle>
             <DialogDescription>
               Actualiza los datos del residente
             </DialogDescription>
           </DialogHeader>
-          <Form {...editForm}>
-            <form onSubmit={editForm.handleSubmit(onEditSubmit)} className="space-y-4">
-              <FormField
-                control={editForm.control}
-                name="communityId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Comunidad</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || ""}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-edit-community">
-                          <SelectValue placeholder="Selecciona una comunidad" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {communities?.map(community => (
-                          <SelectItem key={community.id} value={community.id}>
-                            {community.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="grid grid-cols-2 gap-4">
+          <ScrollArea className="max-h-[60vh] pr-4">
+            <Form {...editForm}>
+              <form onSubmit={editForm.handleSubmit(onEditSubmit)} className="space-y-4">
                 <FormField
                   control={editForm.control}
-                  name="firstName"
+                  name="communityId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Nombre</FormLabel>
+                      <FormLabel>Comunidad</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || ""}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-edit-community">
+                            <SelectValue placeholder="Selecciona una comunidad" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {communities?.map(community => (
+                            <SelectItem key={community.id} value={community.id}>
+                              {community.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={editForm.control}
+                    name="firstName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Nombre</FormLabel>
+                        <FormControl>
+                          <Input {...field} data-testid="input-edit-firstname" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={editForm.control}
+                    name="lastName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Apellidos</FormLabel>
+                        <FormControl>
+                          <Input {...field} data-testid="input-edit-lastname" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <FormField
+                  control={editForm.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Correo Electrónico</FormLabel>
                       <FormControl>
-                        <Input {...field} data-testid="input-edit-firstname" />
+                        <Input {...field} type="email" data-testid="input-edit-email" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
 
-                <FormField
-                  control={editForm.control}
-                  name="lastName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Apellidos</FormLabel>
-                      <FormControl>
-                        <Input {...field} data-testid="input-edit-lastname" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={editForm.control}
+                    name="phone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Teléfono</FormLabel>
+                        <FormControl>
+                          <Input {...field} data-testid="input-edit-phone" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-              <FormField
-                control={editForm.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Correo Electrónico</FormLabel>
-                    <FormControl>
-                      <Input {...field} type="email" data-testid="input-edit-email" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={editForm.control}
-                  name="phone"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Teléfono</FormLabel>
-                      <FormControl>
-                        <Input {...field} data-testid="input-edit-phone" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                  <FormField
+                    control={editForm.control}
+                    name="dateOfBirth"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Fecha de Nacimiento</FormLabel>
+                        <FormControl>
+                          <Input {...field} type="date" data-testid="input-edit-dob" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
 
                 <FormField
                   control={editForm.control}
@@ -738,37 +776,37 @@ export default function Vecinos() {
                     </FormItem>
                   )}
                 />
-              </div>
 
-              <FormField
-                control={editForm.control}
-                name="role"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Rol</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-edit-role">
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="vecino">Vecino</SelectItem>
-                        <SelectItem value="presidente">Presidente</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                <FormField
+                  control={editForm.control}
+                  name="role"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Rol</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-edit-role">
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="vecino">Vecino</SelectItem>
+                          <SelectItem value="presidente">Presidente</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-              <DialogFooter>
-                <Button type="submit" disabled={updateUserMutation.isPending} data-testid="button-submit-edit">
-                  {updateUserMutation.isPending ? "Guardando..." : "Guardar Cambios"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
+                <DialogFooter className="pt-4">
+                  <Button type="submit" disabled={updateUserMutation.isPending} data-testid="button-submit-edit">
+                    {updateUserMutation.isPending ? "Guardando..." : "Guardar Cambios"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </Form>
+          </ScrollArea>
         </DialogContent>
       </Dialog>
 

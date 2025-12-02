@@ -119,12 +119,14 @@ export async function createGHLContact(
       payload.phone = user.phone;
     }
 
-    // Add company info - both companyId (for linking) and companyName (for display)
+    // Add company/business name - this appears as "Business Name" in GHL
     if (community) {
       payload.companyName = community.name;
-      if (community.ghlBusinessId) {
-        payload.companyId = community.ghlBusinessId;
-      }
+    }
+
+    // Add date of birth if provided
+    if (user.dateOfBirth) {
+      payload.dateOfBirth = user.dateOfBirth;
     }
 
     console.log(`[GHL] Creating contact for user: ${user.email}`);
@@ -205,18 +207,19 @@ export async function updateGHLContact(
     if (userData.email !== undefined) payload.email = userData.email;
     if (userData.phone !== undefined) payload.phone = userData.phone;
 
-    // Handle community change - update companyName and companyId
+    // Handle community change - update companyName (Business Name in GHL)
     if (community !== undefined) {
       if (community) {
         payload.companyName = community.name;
-        if (community.ghlBusinessId) {
-          payload.companyId = community.ghlBusinessId;
-        }
       } else {
-        // Clear company association if community is null
+        // Clear company name if community is null
         payload.companyName = null;
-        payload.companyId = null;
       }
+    }
+
+    // Handle date of birth
+    if (userData.dateOfBirth !== undefined) {
+      payload.dateOfBirth = userData.dateOfBirth;
     }
 
     console.log(`[GHL] Updating contact: ${ghlContactId}`, payload);

@@ -66,6 +66,7 @@ export const users = pgTable("users", {
   role: roleEnum("role").notNull().default("vecino"),
   firstName: text("first_name"), // First name for GHL sync
   lastName: text("last_name"), // Last name for GHL sync
+  dateOfBirth: text("date_of_birth"), // Date of birth for GHL sync (YYYY-MM-DD format)
   unitNumber: text("unit_number"), // Apartment/unit number for residents
   active: boolean("active").notNull().default(true), // For soft-delete/disable users
   ghlContactId: text("ghl_contact_id"), // GoHighLevel Contact ID for CRM sync
