@@ -41,15 +41,16 @@ The UI features a professional, modern design with a purple/orange glassmorphism
     -   Security: Admin can only manage communities within their own property company
 -   **User Management** (Admin Fincas):
     -   Vecinos management page (`/vecinos`) to view all users across managed communities
-    -   Create new vecinos with username, email, password, phone, unit, and role
-    -   Edit user details (name, email, phone, unit, role)
+    -   Create new vecinos with firstName, lastName, username, email, password, phone, unit, and role
+    -   Edit user details (firstName, lastName, email, phone, unit, role, community)
+    -   **Community Reassignment**: Admin can move vecinos between communities within their property company
     -   Reset user passwords
     -   Deactivate/reactivate users
     -   Filter users by community
-    -   All changes sync to GoHighLevel CRM
+    -   All changes sync to GoHighLevel CRM with firstName, lastName, companyName (community name)
 -   **User Self-Service**:
     -   Profile page (`/perfil`) for users to update their own contact information
-    -   Users can update: full name, email, phone
+    -   Users can update: firstName, lastName, email, phone
     -   Changes sync automatically to GoHighLevel CRM
     -   Read-only display of account info (username, role, status)
 -   **Role-Based Access Control**: Granular permissions for `superadmin`, `admin_fincas`, `presidente`, and `vecino` roles.
@@ -100,8 +101,8 @@ Two environment secrets are required:
 
 **Users → GHL Contacts**:
 -   **Create**: When a new user is registered, they're synced as a Contact in GHL
--   **Update**: When user details change (fullName, email, phone), changes sync to GHL
--   **Self-Update**: Users can update their own profile (fullName, email, phone) via `/perfil` page, which syncs to GHL
+-   **Update**: When user details change (firstName, lastName, email, phone), changes sync to GHL
+-   **Self-Update**: Users can update their own profile (firstName, lastName, email, phone) via `/perfil` page, which syncs to GHL
 -   **Deactivate**: When a user is deactivated, the GHL Contact is tagged "Ex-Residente" (contacts are never deleted)
 -   **Reactivate**: Deactivated users can be reactivated by admin_fincas, removing the "Ex-Residente" tag
 -   Synced fields: firstName, lastName, email, phone, tags (based on role)

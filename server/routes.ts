@@ -1039,11 +1039,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Admin not associated with a property company" });
       }
 
-      const { username, email, password, fullName, phone, unitNumber, role, communityId } = req.body;
+      const { username, email, password, firstName, lastName, phone, unitNumber, role, communityId } = req.body;
       
       // Validate required fields
-      if (!username || !email || !password || !communityId) {
-        return res.status(400).json({ error: "Username, email, password, and community are required" });
+      if (!username || !email || !password || !communityId || !firstName || !lastName) {
+        return res.status(400).json({ error: "Username, email, password, firstName, lastName, and community are required" });
       }
 
       // Verify the community belongs to this admin's property company
@@ -1073,7 +1073,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         username: username.toLowerCase(),
         email: email.toLowerCase(),
         password: passwordHash,
-        fullName: fullName || null,
+        firstName,
+        lastName,
         phone: phone || null,
         unitNumber: unitNumber || null,
         role: validRole,
@@ -1100,10 +1101,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/users/me", requireAuth, async (req: Request, res: Response) => {
     try {
       const currentUser = req.user as User;
-      const { fullName, email, phone } = req.body;
+      const { firstName, lastName, email, phone } = req.body;
       
       const updateData: Record<string, unknown> = {};
-      if (fullName !== undefined) updateData.fullName = fullName;
+      if (firstName !== undefined) updateData.firstName = firstName;
+      if (lastName !== undefined) updateData.lastName = lastName;
       if (email !== undefined) updateData.email = email.toLowerCase();
       if (phone !== undefined) updateData.phone = phone;
 
