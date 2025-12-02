@@ -48,6 +48,61 @@ function getHeaders(apiKey: string) {
   };
 }
 
+// Convert date to ISO 8601 format that GHL accepts
+function formatDateForGHL(date: string | null | undefined): string | null {
+  if (!date) return null;
+  // If it's already a full ISO string, return as-is
+  if (date.includes('T')) return date;
+  // Convert YYYY-MM-DD to ISO 8601 with midnight UTC
+  return `${date}T00:00:00.000Z`;
+}
+
+// Add a tag to a GHL contact using the dedicated tag endpoint
+async function addTagToContact(ghlContactId: string, tag: string, apiKey: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${GHL_API_BASE}/contacts/${ghlContactId}/tags`, {
+      method: "POST",
+      headers: getHeaders(apiKey),
+      body: JSON.stringify({ tags: [tag] }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json() as GHLError;
+      console.error(`[GHL] Failed to add tag "${tag}": ${response.status}`, errorData);
+      return false;
+    }
+
+    console.log(`[GHL] Tag "${tag}" added to contact: ${ghlContactId}`);
+    return true;
+  } catch (error) {
+    console.error(`[GHL] Error adding tag "${tag}":`, error);
+    return false;
+  }
+}
+
+// Remove a tag from a GHL contact using the dedicated tag endpoint
+async function removeTagFromContact(ghlContactId: string, tag: string, apiKey: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${GHL_API_BASE}/contacts/${ghlContactId}/tags`, {
+      method: "DELETE",
+      headers: getHeaders(apiKey),
+      body: JSON.stringify({ tags: [tag] }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json() as GHLError;
+      console.error(`[GHL] Failed to remove tag "${tag}": ${response.status}`, errorData);
+      return false;
+    }
+
+    console.log(`[GHL] Tag "${tag}" removed from contact: ${ghlContactId}`);
+    return true;
+  } catch (error) {
+    console.error(`[GHL] Error removing tag "${tag}":`, error);
+    return false;
+  }
+}
+
 export async function createGHLBusiness(community: Community, residentCount?: number): Promise<string | null> {
   const config = getGHLConfig();
   if (!config) return null;
@@ -129,9 +184,10 @@ export async function createGHLContact(
       payload.companyName = community.name;
     }
 
-    // Add date of birth if provided
-    if (user.dateOfBirth) {
-      payload.dateOfBirth = user.dateOfBirth;
+    // Add date of birth if provided - convert to ISO 8601 format
+    const formattedDOB = formatDateForGHL(user.dateOfBirth);
+    if (formattedDOB) {
+      payload.dateOfBirth = formattedDOB;
     }
 
     console.log(`[GHL] Creating contact for user: ${user.email}`);
@@ -228,9 +284,12 @@ export async function updateGHLContact(
       }
     }
 
-    // Handle date of birth
+    // Handle date of birth - convert to ISO 8601 format
     if (userData.dateOfBirth !== undefined) {
-      payload.dateOfBirth = userData.dateOfBirth;
+      const formattedDOB = formatDateForGHL(userData.dateOfBirth as string | null);
+      if (formattedDOB) {
+        payload.dateOfBirth = formattedDOB;
+      }
     }
 
     console.log(`[GHL] Updating contact: ${ghlContactId}`, payload);
@@ -307,27 +366,19 @@ export async function deactivateGHLContact(
 
     const previousTag = roleTagMap[previousRole] || previousRole;
 
-    const payload = {
-      tags: ["Ex-Residente"],
-      tagsToRemove: [previousTag],
-    };
-
     console.log(`[GHL] Deactivating contact: ${ghlContactId} (was ${previousRole})`);
 
-    const response = await fetch(`${GHL_API_BASE}/contacts/${ghlContactId}`, {
-      method: "PUT",
-      headers: getHeaders(config.apiKey),
-      body: JSON.stringify(payload),
-    });
+    // Use dedicated tag endpoints - add Ex-Residente, remove role tag
+    const addResult = await addTagToContact(ghlContactId, "Ex-Residente", config.apiKey);
+    const removeResult = await removeTagFromContact(ghlContactId, previousTag, config.apiKey);
 
-    if (!response.ok) {
-      const errorData = await response.json() as GHLError;
-      console.error(`[GHL] Failed to deactivate contact: ${response.status}`, errorData);
-      return false;
+    if (addResult && removeResult) {
+      console.log(`[GHL] Contact deactivated successfully: ${ghlContactId}`);
+      return true;
+    } else {
+      console.error(`[GHL] Partial deactivation - add: ${addResult}, remove: ${removeResult}`);
+      return addResult; // Return true if at least the Ex-Residente tag was added
     }
-
-    console.log(`[GHL] Contact deactivated successfully: ${ghlContactId}`);
-    return true;
   } catch (error) {
     console.error("[GHL] Error deactivating contact:", error);
     return false;
@@ -351,27 +402,19 @@ export async function reactivateGHLContact(
 
     const roleTag = roleTagMap[role] || role;
 
-    const payload = {
-      tags: [roleTag],
-      tagsToRemove: ["Ex-Residente"],
-    };
-
     console.log(`[GHL] Reactivating contact: ${ghlContactId} (role: ${role})`);
 
-    const response = await fetch(`${GHL_API_BASE}/contacts/${ghlContactId}`, {
-      method: "PUT",
-      headers: getHeaders(config.apiKey),
-      body: JSON.stringify(payload),
-    });
+    // Use dedicated tag endpoints - add role tag, remove Ex-Residente
+    const addResult = await addTagToContact(ghlContactId, roleTag, config.apiKey);
+    const removeResult = await removeTagFromContact(ghlContactId, "Ex-Residente", config.apiKey);
 
-    if (!response.ok) {
-      const errorData = await response.json() as GHLError;
-      console.error(`[GHL] Failed to reactivate contact: ${response.status}`, errorData);
-      return false;
+    if (addResult && removeResult) {
+      console.log(`[GHL] Contact reactivated successfully: ${ghlContactId}`);
+      return true;
+    } else {
+      console.error(`[GHL] Partial reactivation - add: ${addResult}, remove: ${removeResult}`);
+      return addResult; // Return true if at least the role tag was added
     }
-
-    console.log(`[GHL] Contact reactivated successfully: ${ghlContactId}`);
-    return true;
   } catch (error) {
     console.error("[GHL] Error reactivating contact:", error);
     return false;
