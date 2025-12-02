@@ -161,6 +161,16 @@ export interface IStorage {
     unpaidQuotas: number;
   }>;
   
+  // Recent activity (community-scoped) - returns incidents with reporter info
+  getRecentActivity(communityId: string, limit?: number): Promise<Array<{
+    id: string;
+    type: 'incidencia';
+    title: string;
+    status: string;
+    reporterName: string;
+    createdAt: Date;
+  }>>;
+  
   // Superadmin stats
   getSuperadminStats(): Promise<{
     totalPropertyCompanies: number;
@@ -736,6 +746,41 @@ export class DbStorage implements IStorage {
       totalDerramas: totalDerramasCount?.count || 0,
       unpaidQuotas: unpaidQuotasCount?.count || 0,
     };
+  }
+
+  // Recent activity - get recent incidents with reporter names
+  async getRecentActivity(communityId: string, limit: number = 10): Promise<Array<{
+    id: string;
+    type: 'incidencia';
+    title: string;
+    status: string;
+    reporterName: string;
+    createdAt: Date;
+  }>> {
+    const result = await db.select({
+      id: incidents.id,
+      title: incidents.title,
+      status: incidents.status,
+      createdAt: incidents.createdAt,
+      reporterFirstName: users.firstName,
+      reporterLastName: users.lastName,
+    })
+    .from(incidents)
+    .leftJoin(users, eq(incidents.reportedBy, users.id))
+    .where(eq(incidents.communityId, communityId))
+    .orderBy(desc(incidents.createdAt))
+    .limit(limit);
+
+    return result.map(row => ({
+      id: row.id,
+      type: 'incidencia' as const,
+      title: row.title,
+      status: row.status,
+      reporterName: row.reporterFirstName && row.reporterLastName 
+        ? `${row.reporterFirstName} ${row.reporterLastName}` 
+        : 'Usuario',
+      createdAt: row.createdAt,
+    }));
   }
 
   // Superadmin stats

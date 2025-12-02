@@ -593,6 +593,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Recent activity endpoint (admin_fincas and presidente only)
+  app.get("/api/dashboard/activity", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = req.user as User;
+      // Only admin_fincas and presidente can see activity feed
+      if (user.role !== 'admin_fincas' && user.role !== 'presidente') {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const communityId = getCommunityId(req);
+      const limit = parseInt(req.query.limit as string) || 10;
+      const activity = await storage.getRecentActivity(communityId, limit);
+      res.json(activity);
+    } catch (error) {
+      console.error("Error fetching recent activity:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // Incidents endpoints
   app.get("/api/incidents", requireAuth, async (req: Request, res: Response) => {
     try {

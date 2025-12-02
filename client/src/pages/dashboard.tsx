@@ -5,7 +5,19 @@ import { AlertCircle, FileText, CheckSquare, DollarSign, Receipt, AlertTriangle 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useQuery } from "@tanstack/react-query";
+import { useUser } from "@/hooks/use-auth";
+import { formatDistanceToNow } from "date-fns";
+import { es } from "date-fns/locale";
 import type { Incident } from "@shared/schema";
+
+interface RecentActivity {
+  id: string;
+  type: 'incidencia';
+  title: string;
+  status: string;
+  reporterName: string;
+  createdAt: string;
+}
 
 interface DashboardStats {
   totalIncidents: number;
@@ -17,12 +29,21 @@ interface DashboardStats {
 }
 
 export default function Dashboard() {
+  const { data: user } = useUser();
+  const isAdmin = user?.role === 'admin_fincas' || user?.role === 'presidente';
+
   const { data: stats, isLoading: statsLoading } = useQuery<DashboardStats>({
     queryKey: ["/api/dashboard/stats"],
   });
 
   const { data: incidents, isLoading: incidentsLoading } = useQuery<Incident[]>({
     queryKey: ["/api/incidents"],
+  });
+
+  // Fetch recent activity only for admin users
+  const { data: recentActivity, isLoading: activityLoading } = useQuery<RecentActivity[]>({
+    queryKey: ["/api/dashboard/activity"],
+    enabled: isAdmin,
   });
 
   const recentIncidents = incidents?.slice(0, 3) || [];
@@ -36,37 +57,16 @@ export default function Dashboard() {
     { title: "Cuotas Impagadas", value: stats.unpaidQuotas, icon: AlertTriangle },
   ] : [];
 
-  const activities = [
-    {
-      id: '1',
-      type: 'incidencia' as const,
-      title: 'Nueva incidencia: Fuga de agua en portal',
-      user: 'María García',
-      time: 'hace 30 min',
-      status: 'Pendiente',
-    },
-    {
-      id: '2',
-      type: 'documento' as const,
-      title: 'Acta Enero 2025 analizada con IA',
-      user: 'Sistema IA',
-      time: 'hace 2 horas',
-    },
-    {
-      id: '3',
-      type: 'acuerdo' as const,
-      title: 'Acuerdo completado: Revisión ascensores',
-      user: 'Juan Pérez',
-      time: 'hace 1 día',
-    },
-    {
-      id: '4',
-      type: 'derrama' as const,
-      title: 'Pago recibido: Reparación fachada',
-      user: 'Carlos Ruiz',
-      time: 'hace 2 días',
-    },
-  ];
+  // Format recent activity for ActivityFeed component
+  const activities = recentActivity?.map(activity => ({
+    id: activity.id,
+    type: activity.type,
+    title: activity.title,
+    user: activity.reporterName,
+    time: formatDistanceToNow(new Date(activity.createdAt), { addSuffix: true, locale: es }),
+    status: activity.status === 'pendiente' ? 'Pendiente' : 
+            activity.status === 'en_curso' ? 'En curso' : 'Resuelto',
+  })) || [];
 
   return (
     <div className="p-6 space-y-6 bg-gradient-to-br from-background via-primary/[0.02] to-accent/[0.02] min-h-full" data-testid="page-dashboard">
@@ -95,8 +95,8 @@ export default function Dashboard() {
         )}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2 space-y-4">
+      <div className={`grid gap-6 ${isAdmin ? 'lg:grid-cols-3' : 'lg:grid-cols-1'}`}>
+        <div className={isAdmin ? 'lg:col-span-2' : ''}>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <CardTitle className="text-lg">Incidencias Recientes</CardTitle>
@@ -132,9 +132,33 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        <div>
-          <ActivityFeed activities={activities} />
-        </div>
+        {isAdmin && (
+          <div>
+            {activityLoading ? (
+              <Card data-testid="card-activity-feed">
+                <CardHeader>
+                  <CardTitle className="text-lg">Actividad Reciente</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {[...Array(4)].map((_, i) => (
+                    <div key={i} className="h-16 bg-muted/20 animate-pulse rounded-md" />
+                  ))}
+                </CardContent>
+              </Card>
+            ) : activities.length === 0 ? (
+              <Card data-testid="card-activity-feed">
+                <CardHeader>
+                  <CardTitle className="text-lg">Actividad Reciente</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-center text-muted-foreground py-8">No hay actividad reciente</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <ActivityFeed activities={activities} />
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
