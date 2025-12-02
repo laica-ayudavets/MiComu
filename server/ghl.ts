@@ -323,6 +323,50 @@ export async function deactivateGHLContact(
   }
 }
 
+export async function reactivateGHLContact(
+  ghlContactId: string,
+  role: string
+): Promise<boolean> {
+  const config = getGHLConfig();
+  if (!config) return false;
+
+  try {
+    const roleTagMap: Record<string, string> = {
+      vecino: "Resident",
+      presidente: "President",
+      admin_fincas: "Property Manager",
+      superadmin: "Super Admin",
+    };
+
+    const roleTag = roleTagMap[role] || role;
+
+    const payload = {
+      tags: [roleTag],
+      tagsToRemove: ["Ex-Residente"],
+    };
+
+    console.log(`[GHL] Reactivating contact: ${ghlContactId} (role: ${role})`);
+
+    const response = await fetch(`${GHL_API_BASE}/contacts/${ghlContactId}`, {
+      method: "PUT",
+      headers: getHeaders(config.apiKey),
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json() as GHLError;
+      console.error(`[GHL] Failed to reactivate contact: ${response.status}`, errorData);
+      return false;
+    }
+
+    console.log(`[GHL] Contact reactivated successfully: ${ghlContactId}`);
+    return true;
+  } catch (error) {
+    console.error("[GHL] Error reactivating contact:", error);
+    return false;
+  }
+}
+
 export function isGHLConfigured(): boolean {
   return getGHLConfig() !== null;
 }

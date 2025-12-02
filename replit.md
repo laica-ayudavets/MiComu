@@ -101,12 +101,11 @@ Two environment secrets are required:
 
 **Users → GHL Contacts**:
 -   **Create**: When a new user is registered, they're synced as a Contact in GHL
--   **Update**: When user details change (firstName, lastName, email, phone), changes sync to GHL
+-   **Update**: When user details change (firstName, lastName, email, phone, dateOfBirth), changes sync to GHL
 -   **Self-Update**: Users can update their own profile (firstName, lastName, email, phone) via `/perfil` page, which syncs to GHL
--   **Deactivate**: When a user is deactivated, the GHL Contact is tagged "Ex-Residente" (contacts are never deleted)
--   **Reactivate**: Deactivated users can be reactivated by admin_fincas, removing the "Ex-Residente" tag
--   Synced fields: firstName, lastName, email, phone, tags (based on role)
--   If user's community has a `ghlBusinessId`, the contact is linked via `companyId`
+-   **Deactivate**: When a user is deactivated, the GHL Contact is tagged "Ex-Residente" and role tag is removed (contacts are never deleted)
+-   **Reactivate**: Deactivated users can be reactivated by admin_fincas, restoring the role tag and removing the "Ex-Residente" tag
+-   Synced fields: firstName, lastName, email, phone, dateOfBirth, companyName (community name), tags (based on role)
 -   The GHL Contact ID is stored in `users.ghlContactId`
 -   All sync operations are asynchronous and non-blocking
 

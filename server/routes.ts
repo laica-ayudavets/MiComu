@@ -12,7 +12,7 @@ import {
   requireAuth,
   requireRole
 } from "./auth";
-import { createGHLBusiness, createGHLContact, updateGHLBusiness, archiveGHLBusiness, updateGHLContact, deactivateGHLContact, isGHLConfigured } from "./ghl";
+import { createGHLBusiness, createGHLContact, updateGHLBusiness, archiveGHLBusiness, updateGHLContact, deactivateGHLContact, reactivateGHLContact, isGHLConfigured } from "./ghl";
 import { 
   insertIncidentSchema,
   updateIncidentSchema,
@@ -43,7 +43,8 @@ import {
   superAdminUpdateUserSchema,
   createAdminWithPasswordSchema,
   users,
-  type User
+  type User,
+  type Community
 } from "@shared/schema";
 import { z } from "zod";
 import { eq, desc, sql, inArray } from "drizzle-orm";
@@ -1168,14 +1169,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Access denied" });
       }
 
-      const { fullName, email, phone, unitNumber, role } = req.body;
+      const { firstName, lastName, email, phone, dateOfBirth, unitNumber, role, communityId } = req.body;
       const updateData: Record<string, unknown> = {};
-      if (fullName !== undefined) updateData.fullName = fullName;
+      if (firstName !== undefined) updateData.firstName = firstName;
+      if (lastName !== undefined) updateData.lastName = lastName;
       if (email !== undefined) updateData.email = email.toLowerCase();
       if (phone !== undefined) updateData.phone = phone;
+      if (dateOfBirth !== undefined) updateData.dateOfBirth = dateOfBirth;
       if (unitNumber !== undefined) updateData.unitNumber = unitNumber;
       if (role !== undefined && (role === "vecino" || role === "presidente")) {
         updateData.role = role;
+      }
+      
+      // Handle community transfer if provided
+      let newCommunity: Community | null = null;
+      if (communityId !== undefined && communityId !== targetUser.communityId) {
+        // Verify new community belongs to this admin's property company
+        const targetCommunity = await storage.getCommunity(communityId);
+        if (!targetCommunity || targetCommunity.propertyCompanyId !== currentUser.propertyCompanyId) {
+          return res.status(403).json({ error: "Access denied - cannot transfer to this community" });
+        }
+        updateData.communityId = communityId;
+        newCommunity = targetCommunity;
       }
 
       const updatedUser = await storage.updateUser(req.params.id, updateData);
@@ -1185,7 +1200,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Sync changes to GHL if configured and user has a GHL Contact ID
       if (isGHLConfigured() && updatedUser.ghlContactId) {
-        updateGHLContact(updatedUser.ghlContactId, updateData).catch(err => {
+        // Only pass community if:
+        // 1. User was transferred to a new community (newCommunity is set), OR
+        // 2. User didn't change community but we need to include current community name
+        // We DON'T pass undefined to avoid accidentally clearing companyName
+        let communityForGHL: Community | null | undefined = undefined;
+        if (newCommunity) {
+          // User was transferred to a new community
+          communityForGHL = newCommunity;
+        }
+        // Note: We only pass community when it changes (newCommunity), 
+        // otherwise we don't include it in the update to preserve existing companyName
+        updateGHLContact(updatedUser.ghlContactId, updateData, communityForGHL).catch(err => {
           console.error("[GHL] Failed to sync user update:", err);
         });
       }
@@ -1259,6 +1285,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updatedUser = await storage.updateUser(req.params.id, { active: true });
       if (!updatedUser) {
         return res.status(500).json({ error: "Failed to reactivate user" });
+      }
+
+      // Restore role tag in GHL (remove Ex-Residente tag)
+      if (isGHLConfigured() && targetUser.ghlContactId) {
+        reactivateGHLContact(targetUser.ghlContactId, targetUser.role).catch(err => {
+          console.error("[GHL] Failed to reactivate contact:", err);
+        });
       }
 
       const { password: _, ...sanitizedUser } = updatedUser;
