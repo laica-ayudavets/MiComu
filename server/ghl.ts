@@ -95,9 +95,9 @@ export async function createGHLContact(
   if (!config) return null;
 
   try {
-    const nameParts = (user.fullName || user.username).split(" ");
-    const firstName = nameParts[0] || user.username;
-    const lastName = nameParts.slice(1).join(" ") || "";
+    // Use firstName/lastName directly from user, fallback to username
+    const firstName = user.firstName || user.username;
+    const lastName = user.lastName || "";
 
     const roleMap: Record<string, string> = {
       vecino: "Resident",
@@ -114,8 +114,17 @@ export async function createGHLContact(
       tags: [roleMap[user.role] || user.role],
     };
 
-    if (community?.ghlBusinessId) {
-      payload.companyId = community.ghlBusinessId;
+    // Add phone if provided
+    if (user.phone) {
+      payload.phone = user.phone;
+    }
+
+    // Add company info - both companyId (for linking) and companyName (for display)
+    if (community) {
+      payload.companyName = community.name;
+      if (community.ghlBusinessId) {
+        payload.companyId = community.ghlBusinessId;
+      }
     }
 
     console.log(`[GHL] Creating contact for user: ${user.email}`);
@@ -181,7 +190,8 @@ export async function updateGHLBusiness(
 
 export async function updateGHLContact(
   ghlContactId: string,
-  user: Record<string, unknown>
+  userData: Record<string, unknown>,
+  community?: Community | null
 ): Promise<boolean> {
   const config = getGHLConfig();
   if (!config) return false;
@@ -189,16 +199,27 @@ export async function updateGHLContact(
   try {
     const payload: Record<string, unknown> = {};
 
-    if (user.fullName) {
-      const nameParts = (user.fullName as string).split(" ");
-      payload.firstName = nameParts[0];
-      payload.lastName = nameParts.slice(1).join(" ") || "";
+    // Handle firstName/lastName directly
+    if (userData.firstName !== undefined) payload.firstName = userData.firstName;
+    if (userData.lastName !== undefined) payload.lastName = userData.lastName;
+    if (userData.email !== undefined) payload.email = userData.email;
+    if (userData.phone !== undefined) payload.phone = userData.phone;
+
+    // Handle community change - update companyName and companyId
+    if (community !== undefined) {
+      if (community) {
+        payload.companyName = community.name;
+        if (community.ghlBusinessId) {
+          payload.companyId = community.ghlBusinessId;
+        }
+      } else {
+        // Clear company association if community is null
+        payload.companyName = null;
+        payload.companyId = null;
+      }
     }
 
-    if (user.email) payload.email = user.email;
-    if (user.phone) payload.phone = user.phone;
-
-    console.log(`[GHL] Updating contact: ${ghlContactId}`);
+    console.log(`[GHL] Updating contact: ${ghlContactId}`, payload);
 
     const response = await fetch(`${GHL_API_BASE}/contacts/${ghlContactId}`, {
       method: "PUT",

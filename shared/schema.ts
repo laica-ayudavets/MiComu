@@ -64,7 +64,8 @@ export const users = pgTable("users", {
   email: text("email").notNull(),
   phone: text("phone"), // Contact phone number
   role: roleEnum("role").notNull().default("vecino"),
-  fullName: text("full_name"),
+  firstName: text("first_name"), // First name for GHL sync
+  lastName: text("last_name"), // Last name for GHL sync
   unitNumber: text("unit_number"), // Apartment/unit number for residents
   active: boolean("active").notNull().default(true), // For soft-delete/disable users
   ghlContactId: text("ghl_contact_id"), // GoHighLevel Contact ID for CRM sync
@@ -78,7 +79,6 @@ export const insertUserSchema = createInsertSchema(users).omit({
   ghlContactId: true, // Set programmatically during GHL sync
 });
 export const updateUserSchema = insertUserSchema.partial().omit({
-  communityId: true,
   propertyCompanyId: true,
   password: true, // Password changes require separate secure endpoint
 });
@@ -92,7 +92,8 @@ export const superAdminUpdateUserSchema = updateUserSchema.extend({
 export const createAdminWithPasswordSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters"),
   email: z.string().email("Invalid email address"),
-  fullName: z.string().min(1, "Full name is required"),
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
   propertyCompanyId: z.string().uuid("Property company is required"),
   password: z.string()
     .min(8, "Password must be at least 8 characters")

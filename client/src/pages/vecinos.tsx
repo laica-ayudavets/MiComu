@@ -30,7 +30,8 @@ import {
 import type { User, Community } from "@shared/schema";
 
 const userFormSchema = z.object({
-  fullName: z.string().min(2, "El nombre debe tener al menos 2 caracteres"),
+  firstName: z.string().min(2, "El nombre debe tener al menos 2 caracteres"),
+  lastName: z.string().min(2, "El apellido debe tener al menos 2 caracteres"),
   email: z.string().email("Correo electrónico inválido"),
   phone: z.string().optional(),
   unitNumber: z.string().optional(),
@@ -41,11 +42,13 @@ const userFormSchema = z.object({
 });
 
 const editUserFormSchema = z.object({
-  fullName: z.string().min(2, "El nombre debe tener al menos 2 caracteres"),
+  firstName: z.string().min(2, "El nombre debe tener al menos 2 caracteres"),
+  lastName: z.string().min(2, "El apellido debe tener al menos 2 caracteres"),
   email: z.string().email("Correo electrónico inválido"),
   phone: z.string().optional(),
   unitNumber: z.string().optional(),
   role: z.enum(["vecino", "presidente"]),
+  communityId: z.string().optional(), // For community transfer
 });
 
 const passwordSchema = z.object({
@@ -78,13 +81,14 @@ export default function Vecinos() {
   });
 
   const { data: communities, isLoading: communitiesLoading } = useQuery<Community[]>({
-    queryKey: ["/api/communities"],
+    queryKey: ["/api/auth/communities"],
   });
 
   const addForm = useForm<UserFormData>({
     resolver: zodResolver(userFormSchema),
     defaultValues: {
-      fullName: "",
+      firstName: "",
+      lastName: "",
       email: "",
       phone: "",
       unitNumber: "",
@@ -98,17 +102,21 @@ export default function Vecinos() {
   const editForm = useForm<EditUserFormData>({
     resolver: zodResolver(editUserFormSchema),
     values: editingUser ? {
-      fullName: editingUser.fullName || "",
+      firstName: editingUser.firstName || "",
+      lastName: editingUser.lastName || "",
       email: editingUser.email,
       phone: editingUser.phone || "",
       unitNumber: editingUser.unitNumber || "",
       role: editingUser.role as "vecino" | "presidente",
+      communityId: editingUser.communityId || "",
     } : {
-      fullName: "",
+      firstName: "",
+      lastName: "",
       email: "",
       phone: "",
       unitNumber: "",
       role: "vecino",
+      communityId: "",
     },
   });
 
@@ -253,8 +261,9 @@ export default function Vecinos() {
   };
 
   const filteredUsers = users?.filter(user => {
+    const fullName = user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : user.username;
     const matchesSearch = search === "" || 
-      user.fullName?.toLowerCase().includes(search.toLowerCase()) ||
+      fullName.toLowerCase().includes(search.toLowerCase()) ||
       user.email.toLowerCase().includes(search.toLowerCase()) ||
       user.unitNumber?.toLowerCase().includes(search.toLowerCase());
     
@@ -343,19 +352,35 @@ export default function Vecinos() {
                   )}
                 />
 
-                <FormField
-                  control={addForm.control}
-                  name="fullName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Nombre Completo</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="Juan García López" data-testid="input-add-fullname" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={addForm.control}
+                    name="firstName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Nombre</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Juan" data-testid="input-add-firstname" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={addForm.control}
+                    name="lastName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Apellidos</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="García López" data-testid="input-add-lastname" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
 
                 <FormField
                   control={addForm.control}
@@ -543,7 +568,7 @@ export default function Vecinos() {
                 ) : (
                   filteredUsers?.map(user => (
                     <TableRow key={user.id} data-testid={`row-user-${user.id}`}>
-                      <TableCell className="font-medium">{user.fullName || user.username}</TableCell>
+                      <TableCell className="font-medium">{user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : user.username}</TableCell>
                       <TableCell>{user.email}</TableCell>
                       <TableCell>{user.phone || "-"}</TableCell>
                       <TableCell>{user.unitNumber || "-"}</TableCell>
@@ -618,17 +643,58 @@ export default function Vecinos() {
             <form onSubmit={editForm.handleSubmit(onEditSubmit)} className="space-y-4">
               <FormField
                 control={editForm.control}
-                name="fullName"
+                name="communityId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Nombre Completo</FormLabel>
-                    <FormControl>
-                      <Input {...field} data-testid="input-edit-fullname" />
-                    </FormControl>
+                    <FormLabel>Comunidad</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || ""}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-edit-community">
+                          <SelectValue placeholder="Selecciona una comunidad" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {communities?.map(community => (
+                          <SelectItem key={community.id} value={community.id}>
+                            {community.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={editForm.control}
+                  name="firstName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Nombre</FormLabel>
+                      <FormControl>
+                        <Input {...field} data-testid="input-edit-firstname" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={editForm.control}
+                  name="lastName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Apellidos</FormLabel>
+                      <FormControl>
+                        <Input {...field} data-testid="input-edit-lastname" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
               <FormField
                 control={editForm.control}
@@ -717,7 +783,7 @@ export default function Vecinos() {
           <DialogHeader>
             <DialogTitle>Cambiar Contraseña</DialogTitle>
             <DialogDescription>
-              Establece una nueva contraseña para {passwordUser?.fullName || passwordUser?.username}
+              Establece una nueva contraseña para {passwordUser?.firstName && passwordUser?.lastName ? `${passwordUser.firstName} ${passwordUser.lastName}` : passwordUser?.username}
             </DialogDescription>
           </DialogHeader>
           <Form {...passwordForm}>
@@ -786,7 +852,7 @@ export default function Vecinos() {
           <AlertDialogHeader>
             <AlertDialogTitle>Desactivar Vecino</AlertDialogTitle>
             <AlertDialogDescription>
-              ¿Estás seguro de que deseas desactivar a {deactivateUser?.fullName || deactivateUser?.username}? 
+              ¿Estás seguro de que deseas desactivar a {deactivateUser?.firstName && deactivateUser?.lastName ? `${deactivateUser.firstName} ${deactivateUser.lastName}` : deactivateUser?.username}? 
               No podrá acceder al sistema hasta que lo reactives.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -807,7 +873,7 @@ export default function Vecinos() {
           <AlertDialogHeader>
             <AlertDialogTitle>Reactivar Vecino</AlertDialogTitle>
             <AlertDialogDescription>
-              ¿Deseas reactivar a {reactivateUser?.fullName || reactivateUser?.username}? 
+              ¿Deseas reactivar a {reactivateUser?.firstName && reactivateUser?.lastName ? `${reactivateUser.firstName} ${reactivateUser.lastName}` : reactivateUser?.username}? 
               Podrá volver a acceder al sistema.
             </AlertDialogDescription>
           </AlertDialogHeader>

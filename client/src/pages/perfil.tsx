@@ -14,7 +14,8 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Save, UserCircle, Mail, Phone, Home, Building2 } from "lucide-react";
 
 const profileSchema = z.object({
-  fullName: z.string().min(2, "El nombre debe tener al menos 2 caracteres"),
+  firstName: z.string().min(2, "El nombre debe tener al menos 2 caracteres"),
+  lastName: z.string().min(2, "El apellido debe tener al menos 2 caracteres"),
   email: z.string().email("Correo electrónico inválido"),
   phone: z.string().optional(),
 });
@@ -28,7 +29,8 @@ export default function Perfil() {
   const form = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
     values: {
-      fullName: user?.fullName || "",
+      firstName: user?.firstName || "",
+      lastName: user?.lastName || "",
       email: user?.email || "",
       phone: user?.phone || "",
     },
@@ -115,15 +117,33 @@ export default function Perfil() {
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                 <FormField
                   control={form.control}
-                  name="fullName"
+                  name="firstName"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Nombre Completo</FormLabel>
+                      <FormLabel>Nombre</FormLabel>
                       <FormControl>
                         <Input 
                           {...field} 
-                          placeholder="Tu nombre completo"
-                          data-testid="input-fullname"
+                          placeholder="Tu nombre"
+                          data-testid="input-firstname"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="lastName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Apellido</FormLabel>
+                      <FormControl>
+                        <Input 
+                          {...field} 
+                          placeholder="Tu apellido"
+                          data-testid="input-lastname"
                         />
                       </FormControl>
                       <FormMessage />
