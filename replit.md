@@ -39,6 +39,19 @@ The UI features a professional, modern design with a purple/orange glassmorphism
     -   Delete communities with confirmation dialog
     -   Community selector to switch between managed communities
     -   Security: Admin can only manage communities within their own property company
+-   **User Management** (Admin Fincas):
+    -   Vecinos management page (`/vecinos`) to view all users across managed communities
+    -   Create new vecinos with username, email, password, phone, unit, and role
+    -   Edit user details (name, email, phone, unit, role)
+    -   Reset user passwords
+    -   Deactivate/reactivate users
+    -   Filter users by community
+    -   All changes sync to GoHighLevel CRM
+-   **User Self-Service**:
+    -   Profile page (`/perfil`) for users to update their own contact information
+    -   Users can update: full name, email, phone
+    -   Changes sync automatically to GoHighLevel CRM
+    -   Read-only display of account info (username, role, status)
 -   **Role-Based Access Control**: Granular permissions for `superadmin`, `admin_fincas`, `presidente`, and `vecino` roles.
 -   **Community-Scoped Data**: Strict data isolation per community.
 -   **Quotas Management**: Comprehensive system for managing resident fees, payment statuses, and assignments.
@@ -87,9 +100,11 @@ Two environment secrets are required:
 
 **Users → GHL Contacts**:
 -   **Create**: When a new user is registered, they're synced as a Contact in GHL
--   **Update**: When user details change (fullName, email), changes sync to GHL
+-   **Update**: When user details change (fullName, email, phone), changes sync to GHL
+-   **Self-Update**: Users can update their own profile (fullName, email, phone) via `/perfil` page, which syncs to GHL
 -   **Deactivate**: When a user is deactivated, the GHL Contact is tagged "Ex-Residente" (contacts are never deleted)
--   Synced fields: firstName, lastName, email, tags (based on role)
+-   **Reactivate**: Deactivated users can be reactivated by admin_fincas, removing the "Ex-Residente" tag
+-   Synced fields: firstName, lastName, email, phone, tags (based on role)
 -   If user's community has a `ghlBusinessId`, the contact is linked via `companyId`
 -   The GHL Contact ID is stored in `users.ghlContactId`
 -   All sync operations are asynchronous and non-blocking
@@ -103,9 +118,12 @@ Two environment secrets are required:
 
 **User GHL Sync**:
 -   `POST /api/auth/register` → Creates GHL Contact
+-   `POST /api/users` → Creates GHL Contact (admin_fincas creating users for their communities)
+-   `PATCH /api/users/me` → Updates GHL Contact (self-update for any authenticated user)
 -   `PATCH /api/users/:id` → Updates GHL Contact (admin_fincas only, community users)
 -   `PATCH /api/superadmin/admins/:id` → Updates GHL Contact (superadmin only, admin users)
 -   `POST /api/users/:id/deactivate` → Tags GHL Contact as "Ex-Residente" (admin_fincas only)
+-   `POST /api/users/:id/reactivate` → Removes "Ex-Residente" tag from GHL Contact (admin_fincas only)
 -   `POST /api/superadmin/admins/:id/deactivate` → Tags GHL Contact as "Ex-Residente" (superadmin only)
 
 ## Implementation Files
