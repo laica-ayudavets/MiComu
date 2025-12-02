@@ -181,7 +181,7 @@ export async function updateGHLBusiness(
 
 export async function updateGHLContact(
   ghlContactId: string,
-  user: Partial<User>
+  user: Record<string, unknown>
 ): Promise<boolean> {
   const config = getGHLConfig();
   if (!config) return false;
@@ -190,12 +190,13 @@ export async function updateGHLContact(
     const payload: Record<string, unknown> = {};
 
     if (user.fullName) {
-      const nameParts = user.fullName.split(" ");
+      const nameParts = (user.fullName as string).split(" ");
       payload.firstName = nameParts[0];
       payload.lastName = nameParts.slice(1).join(" ") || "";
     }
 
     if (user.email) payload.email = user.email;
+    if (user.phone) payload.phone = user.phone;
 
     console.log(`[GHL] Updating contact: ${ghlContactId}`);
 

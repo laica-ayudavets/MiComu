@@ -46,7 +46,7 @@ import {
   type User
 } from "@shared/schema";
 import { z } from "zod";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, sql, inArray } from "drizzle-orm";
 
 let DEFAULT_PROPERTY_COMPANY_ID: string;
 let DEFAULT_COMMUNITY_ID: string;
@@ -986,9 +986,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Users endpoints (for listing residents in a community)
+  // Users endpoints
+
+  // Get all users - for admin_fincas lists all community users, for vecinos lists their community members
   app.get("/api/users", requireAuth, async (req: Request, res: Response) => {
     try {
+      const currentUser = req.user as User;
+      
+      // Admin_fincas can see all users in their managed communities
+      if (currentUser.role === "admin_fincas") {
+        // Get all communities for this property company
+        const managedCommunities = await storage.getCommunities(currentUser.propertyCompanyId!);
+        const communityIds = managedCommunities.map(c => c.id);
+        
+        if (communityIds.length === 0) {
+          return res.json([]);
+        }
+        
+        // Get all users in these communities
+        const allUsers = await db.select().from(users)
+          .where(inArray(users.communityId, communityIds))
+          .orderBy(desc(users.createdAt));
+        
+        const usersWithoutPasswords = allUsers.map(({ password, ...user }) => user);
+        return res.json(usersWithoutPasswords);
+      }
+      
+      // For vecinos/presidentes, only show their community members (limited info)
       const communityId = getCommunityId(req);
       const allUsers = await db.select().from(users)
         .where(eq(users.communityId, communityId))
@@ -998,6 +1022,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(usersWithoutPasswords);
     } catch (error) {
       console.error("Error fetching users:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Self-update - users can update their own profile info (MUST be before /:id route)
+  app.patch("/api/users/me", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const currentUser = req.user as User;
+      const { fullName, email, phone } = req.body;
+      
+      const updateData: Record<string, unknown> = {};
+      if (fullName !== undefined) updateData.fullName = fullName;
+      if (email !== undefined) updateData.email = email.toLowerCase();
+      if (phone !== undefined) updateData.phone = phone;
+
+      const updatedUser = await storage.updateUser(currentUser.id, updateData);
+      if (!updatedUser) {
+        return res.status(500).json({ error: "Failed to update profile" });
+      }
+
+      // Sync changes to GHL if configured
+      if (isGHLConfigured() && updatedUser.ghlContactId) {
+        updateGHLContact(updatedUser.ghlContactId, updateData).catch(err => {
+          console.error("[GHL] Failed to sync user update:", err);
+        });
+      }
+
+      const { password: _, ...sanitizedUser } = updatedUser;
+      res.json(sanitizedUser);
+    } catch (error) {
+      console.error("Error updating profile:", error);
       res.status(500).json({ error: "Internal server error" });
     }
   });
@@ -1023,11 +1078,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Access denied" });
       }
 
-      const { fullName, email, unitNumber } = req.body;
+      const { fullName, email, phone, unitNumber, role } = req.body;
       const updateData: Record<string, unknown> = {};
       if (fullName !== undefined) updateData.fullName = fullName;
       if (email !== undefined) updateData.email = email.toLowerCase();
+      if (phone !== undefined) updateData.phone = phone;
       if (unitNumber !== undefined) updateData.unitNumber = unitNumber;
+      if (role !== undefined && (role === "vecino" || role === "presidente")) {
+        updateData.role = role;
+      }
 
       const updatedUser = await storage.updateUser(req.params.id, updateData);
       if (!updatedUser) {
@@ -1045,6 +1104,77 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(sanitizedUser);
     } catch (error) {
       console.error("Error updating user:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Password reset - admin can set password for users in their communities
+  app.patch("/api/users/:id/password", requireRole("admin_fincas"), async (req: Request, res: Response) => {
+    try {
+      const currentUser = req.user as User;
+      const targetUser = await storage.getUser(req.params.id);
+      
+      if (!targetUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Users without a communityId cannot be managed by admin_fincas
+      if (!targetUser.communityId) {
+        return res.status(403).json({ error: "Access denied - user is not a community member" });
+      }
+
+      // Verify the user belongs to a community managed by this admin's property company
+      const community = await storage.getCommunity(targetUser.communityId);
+      if (!community || community.propertyCompanyId !== currentUser.propertyCompanyId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const { password } = req.body;
+      if (!password || password.length < 6) {
+        return res.status(400).json({ error: "Password must be at least 6 characters" });
+      }
+
+      const passwordHash = await hashPassword(password);
+      await storage.updateUserPassword(targetUser.id, passwordHash);
+
+      res.json({ success: true, message: "Password updated successfully" });
+    } catch (error) {
+      console.error("Error updating password:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Reactivate a user (restore deactivated accounts)
+  app.post("/api/users/:id/reactivate", requireRole("admin_fincas"), async (req: Request, res: Response) => {
+    try {
+      const currentUser = req.user as User;
+      const targetUser = await storage.getUser(req.params.id);
+      
+      if (!targetUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Users without a communityId cannot be managed by admin_fincas
+      if (!targetUser.communityId) {
+        return res.status(403).json({ error: "Access denied - user is not a community member" });
+      }
+
+      // Verify the user belongs to a community managed by this admin's property company
+      const community = await storage.getCommunity(targetUser.communityId);
+      if (!community || community.propertyCompanyId !== currentUser.propertyCompanyId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      // Mark user as active in database
+      const updatedUser = await storage.updateUser(req.params.id, { active: true });
+      if (!updatedUser) {
+        return res.status(500).json({ error: "Failed to reactivate user" });
+      }
+
+      const { password: _, ...sanitizedUser } = updatedUser;
+      res.json({ success: true, message: "User reactivated successfully", user: sanitizedUser });
+    } catch (error) {
+      console.error("Error reactivating user:", error);
       res.status(500).json({ error: "Internal server error" });
     }
   });
