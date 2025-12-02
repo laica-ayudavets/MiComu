@@ -10,6 +10,8 @@ import {
   Settings,
   CalendarDays,
   LogOut,
+  UserCircle,
+  UsersRound,
 } from "lucide-react";
 import {
   Sidebar,
@@ -76,6 +78,11 @@ const adminMenuItems = [
     title: "Comunidades",
     url: "/comunidades",
     icon: Building2,
+  },
+  {
+    title: "Vecinos",
+    url: "/vecinos",
+    icon: UsersRound,
   },
 ];
 
@@ -156,12 +163,20 @@ export function AppSidebar() {
       <SidebarFooter className="p-4 border-t">
         <SidebarMenu>
           <SidebarMenuItem>
-            <Link href="/configuracion">
-              <SidebarMenuButton data-testid="link-configuracion">
+            <SidebarMenuButton asChild isActive={location === "/perfil"}>
+              <Link href="/perfil" data-testid="link-perfil">
+                <UserCircle className="w-4 h-4" />
+                <span>Mi Perfil</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild isActive={location === "/configuracion"}>
+              <Link href="/configuracion" data-testid="link-configuracion">
                 <Settings className="w-4 h-4" />
                 <span>Configuración</span>
-              </SidebarMenuButton>
-            </Link>
+              </Link>
+            </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton onClick={handleLogout} data-testid="button-logout">

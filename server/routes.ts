@@ -1026,6 +1026,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Create a new user (admin_fincas only for their communities)
+  app.post("/api/users", requireRole("admin_fincas"), async (req: Request, res: Response) => {
+    try {
+      const currentUser = req.user as User;
+      
+      if (!currentUser.propertyCompanyId) {
+        return res.status(400).json({ error: "Admin not associated with a property company" });
+      }
+
+      const { username, email, password, fullName, phone, unitNumber, role, communityId } = req.body;
+      
+      // Validate required fields
+      if (!username || !email || !password || !communityId) {
+        return res.status(400).json({ error: "Username, email, password, and community are required" });
+      }
+
+      // Verify the community belongs to this admin's property company
+      const community = await storage.getCommunity(communityId);
+      if (!community || community.propertyCompanyId !== currentUser.propertyCompanyId) {
+        return res.status(403).json({ error: "Access denied - community not managed by your company" });
+      }
+
+      // Check for existing user with same email or username
+      const existingUser = await storage.getUserByEmail(email.toLowerCase());
+      if (existingUser) {
+        return res.status(400).json({ error: "A user with this email already exists" });
+      }
+
+      const existingUsername = await storage.getUserByUsername(username);
+      if (existingUsername) {
+        return res.status(400).json({ error: "A user with this username already exists" });
+      }
+
+      // Validate role
+      const validRole = role === "presidente" ? "presidente" : "vecino";
+      
+      // Hash password and create user
+      const passwordHash = await hashPassword(password);
+      
+      const newUser = await storage.createUser({
+        username: username.toLowerCase(),
+        email: email.toLowerCase(),
+        password: passwordHash,
+        fullName: fullName || null,
+        phone: phone || null,
+        unitNumber: unitNumber || null,
+        role: validRole,
+        communityId,
+      });
+
+      // Sync to GHL
+      if (isGHLConfigured()) {
+        const ghlContactId = await createGHLContact(newUser, community);
+        if (ghlContactId) {
+          await storage.updateUserGHLId(newUser.id, ghlContactId);
+        }
+      }
+
+      const { password: _, ...sanitizedUser } = newUser;
+      res.status(201).json(sanitizedUser);
+    } catch (error) {
+      console.error("Error creating user:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // Self-update - users can update their own profile info (MUST be before /:id route)
   app.patch("/api/users/me", requireAuth, async (req: Request, res: Response) => {
     try {

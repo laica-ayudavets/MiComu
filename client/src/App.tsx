@@ -28,6 +28,8 @@ import Configuracion from "@/pages/configuracion";
 import SuperadminDashboard from "@/pages/superadmin";
 import SuperadminCompanies from "@/pages/superadmin-companies";
 import SuperadminAdmins from "@/pages/superadmin-admins";
+import Perfil from "@/pages/perfil";
+import Vecinos from "@/pages/vecinos";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -158,6 +160,16 @@ function Router() {
       <Route path="/configuracion">
         <AppLayout>
           <Configuracion />
+        </AppLayout>
+      </Route>
+      <Route path="/perfil">
+        <AppLayout>
+          <Perfil />
+        </AppLayout>
+      </Route>
+      <Route path="/vecinos">
+        <AppLayout>
+          <Vecinos />
         </AppLayout>
       </Route>
       <Route component={NotFound} />

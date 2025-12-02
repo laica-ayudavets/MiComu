@@ -6,11 +6,15 @@ export interface User {
   id: string;
   email: string;
   username: string;
-  fullName: string;
+  fullName: string | null;
+  phone: string | null;
+  unitNumber: string | null;
   role: "superadmin" | "admin_fincas" | "presidente" | "vecino";
   communityId: string | null;
   propertyCompanyId: string | null;
   selectedCommunityId?: string | null;
+  active: boolean;
+  ghlContactId?: string | null;
 }
 
 export type { Community };
