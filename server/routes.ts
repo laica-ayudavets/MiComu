@@ -1422,6 +1422,99 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update user notes (admin_fincas only)
+  app.patch("/api/users/:id/notes", requireRole("admin_fincas"), async (req: Request, res: Response) => {
+    try {
+      const currentUser = req.user as User;
+      const targetUser = await storage.getUser(req.params.id);
+      
+      if (!targetUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Users without a communityId cannot be managed by admin_fincas
+      if (!targetUser.communityId) {
+        return res.status(403).json({ error: "Access denied - user is not a community member" });
+      }
+
+      // Verify the user belongs to a community managed by this admin's property company
+      const community = await storage.getCommunity(targetUser.communityId);
+      if (!community || community.propertyCompanyId !== currentUser.propertyCompanyId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const { notes } = req.body;
+      if (typeof notes !== 'string') {
+        return res.status(400).json({ error: "Notes must be a string" });
+      }
+
+      const updatedUser = await storage.updateUserNotes(req.params.id, notes);
+      if (!updatedUser) {
+        return res.status(500).json({ error: "Failed to update notes" });
+      }
+
+      const { password: _, ...sanitizedUser } = updatedUser;
+      res.json({ success: true, message: "Notes updated successfully", user: sanitizedUser });
+    } catch (error) {
+      console.error("Error updating user notes:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Permanently delete a user (admin_fincas only) - marks as Ex-Residente in GHL, then deletes from DB
+  app.delete("/api/users/:id/permanent", requireRole("admin_fincas"), async (req: Request, res: Response) => {
+    try {
+      const currentUser = req.user as User;
+      const targetUser = await storage.getUser(req.params.id);
+      
+      if (!targetUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Users without a communityId cannot be managed by admin_fincas
+      if (!targetUser.communityId) {
+        return res.status(403).json({ error: "Access denied - user is not a community member" });
+      }
+
+      // Verify the user belongs to a community managed by this admin's property company
+      const community = await storage.getCommunity(targetUser.communityId);
+      if (!community || community.propertyCompanyId !== currentUser.propertyCompanyId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      // First, mark as Ex-Residente in GHL (contact is kept in GHL, not deleted)
+      if (isGHLConfigured() && targetUser.ghlContactId) {
+        try {
+          await deactivateGHLContact(targetUser.ghlContactId, targetUser.role);
+        } catch (err) {
+          console.error("[GHL] Failed to mark contact as Ex-Residente:", err);
+        }
+      }
+
+      // Permanently delete from database
+      const deleted = await storage.deleteUserPermanently(req.params.id);
+      if (!deleted) {
+        return res.status(500).json({ error: "Failed to delete user" });
+      }
+
+      // Update community's GHL business with new resident count
+      if (isGHLConfigured() && community.ghlBusinessId) {
+        storage.countResidentsByCommunity(community.id).then(residentCount => {
+          updateGHLBusiness(community.ghlBusinessId!, {}, residentCount).catch(err => {
+            console.error("[GHL] Failed to update community resident count:", err);
+          });
+        }).catch(err => {
+          console.error("[GHL] Failed to get resident count:", err);
+        });
+      }
+
+      res.json({ success: true, message: "User permanently deleted" });
+    } catch (error) {
+      console.error("Error deleting user permanently:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // Quota Types endpoints
   app.get("/api/quota-types", requireAuth, async (req: Request, res: Response) => {
     try {
