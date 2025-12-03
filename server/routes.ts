@@ -2124,7 +2124,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         email: data.email.toLowerCase(),
         password: hashedPassword,
         username: data.username,
-        fullName: data.fullName,
+        firstName: data.firstName,
+        lastName: data.lastName,
         role: "admin_fincas" as const,
         propertyCompanyId: data.propertyCompanyId,
         communityId: null, // admin_fincas users have no community

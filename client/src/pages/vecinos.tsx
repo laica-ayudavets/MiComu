@@ -5,6 +5,8 @@ import { z } from "zod";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
@@ -26,7 +28,16 @@ import {
   Users, 
   Search,
   Eye,
-  EyeOff
+  EyeOff,
+  Trash2,
+  Save,
+  FileText,
+  Mail,
+  Phone,
+  Home,
+  Calendar,
+  Building2,
+  Shield
 } from "lucide-react";
 import type { User, Community } from "@shared/schema";
 
@@ -79,6 +90,9 @@ export default function Vecinos() {
   const [reactivateUser, setReactivateUser] = useState<User | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
+  const [detailUser, setDetailUser] = useState<User | null>(null);
+  const [userNotes, setUserNotes] = useState("");
+  const [deleteConfirmUser, setDeleteConfirmUser] = useState<User | null>(null);
 
   const { data: users, isLoading: usersLoading } = useQuery<Omit<User, "password">[]>({
     queryKey: ["/api/users"],
@@ -247,6 +261,50 @@ export default function Vecinos() {
       toast({
         title: "Error",
         description: "No se pudo reactivar el vecino.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateNotesMutation = useMutation({
+    mutationFn: async ({ id, notes }: { id: string; notes: string }) => {
+      const response = await apiRequest("PATCH", `/api/users/${id}/notes`, { notes });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({
+        title: "Notas guardadas",
+        description: "Las notas del vecino han sido actualizadas.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "No se pudieron guardar las notas.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const permanentDeleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiRequest("DELETE", `/api/users/${id}/permanent`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      setDeleteConfirmUser(null);
+      setDetailUser(null);
+      toast({
+        title: "Vecino eliminado",
+        description: "El vecino ha sido eliminado permanentemente del sistema.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar el vecino.",
         variant: "destructive",
       });
     },
@@ -618,6 +676,18 @@ export default function Vecinos() {
                           <Button
                             variant="ghost"
                             size="icon"
+                            onClick={() => {
+                              setDetailUser(user as User);
+                              setUserNotes((user as User).notes || "");
+                            }}
+                            title="Ver detalles"
+                            data-testid={`button-detail-${user.id}`}
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             onClick={() => setEditingUser(user as User)}
                             title="Editar"
                             data-testid={`button-edit-${user.id}`}
@@ -934,6 +1004,179 @@ export default function Vecinos() {
               data-testid="button-confirm-reactivate"
             >
               Reactivar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={!!detailUser} onOpenChange={(open) => !open && setDetailUser(null)}>
+        <DialogContent className="max-w-lg max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="w-5 h-5" />
+              Detalles del Vecino
+            </DialogTitle>
+            <DialogDescription>
+              Información completa y notas administrativas
+            </DialogDescription>
+          </DialogHeader>
+          
+          <ScrollArea className="max-h-[60vh]">
+            <div className="space-y-4 pr-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Users className="w-6 h-6 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-lg">
+                      {detailUser?.firstName && detailUser?.lastName 
+                        ? `${detailUser.firstName} ${detailUser.lastName}` 
+                        : detailUser?.username}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">@{detailUser?.username}</p>
+                  </div>
+                </div>
+                <Badge variant={detailUser?.active ? "default" : "secondary"}>
+                  {detailUser?.active ? "Activo" : "Inactivo"}
+                </Badge>
+              </div>
+
+              <Separator />
+
+              <div className="grid gap-3">
+                <div className="flex items-center gap-3">
+                  <Mail className="w-4 h-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Correo Electrónico</p>
+                    <p className="text-sm">{detailUser?.email}</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-3">
+                  <Phone className="w-4 h-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Teléfono</p>
+                    <p className="text-sm">{detailUser?.phone || "No especificado"}</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-3">
+                  <Home className="w-4 h-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Unidad/Vivienda</p>
+                    <p className="text-sm">{detailUser?.unitNumber || "No especificado"}</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-3">
+                  <Calendar className="w-4 h-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Fecha de Nacimiento</p>
+                    <p className="text-sm">{detailUser?.dateOfBirth || "No especificada"}</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-3">
+                  <Building2 className="w-4 h-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Comunidad</p>
+                    <p className="text-sm">{getCommunityName(detailUser?.communityId || null)}</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-3">
+                  <Shield className="w-4 h-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Rol</p>
+                    <div className="mt-1">{detailUser && getRoleBadge(detailUser.role)}</div>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-3">
+                  <Calendar className="w-4 h-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Registrado</p>
+                    <p className="text-sm">
+                      {detailUser?.createdAt 
+                        ? new Date(detailUser.createdAt).toLocaleDateString("es-ES", {
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric"
+                          })
+                        : "Desconocido"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-muted-foreground" />
+                  <p className="text-sm font-medium">Notas Administrativas</p>
+                </div>
+                <Textarea
+                  value={userNotes}
+                  onChange={(e) => setUserNotes(e.target.value)}
+                  placeholder="Añade notas sobre este vecino..."
+                  className="min-h-[100px] resize-none"
+                  data-testid="textarea-notes"
+                />
+                <Button
+                  size="sm"
+                  onClick={() => detailUser && updateNotesMutation.mutate({ id: detailUser.id, notes: userNotes })}
+                  disabled={updateNotesMutation.isPending}
+                  data-testid="button-save-notes"
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  {updateNotesMutation.isPending ? "Guardando..." : "Guardar Notas"}
+                </Button>
+              </div>
+
+              <Separator />
+
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-destructive">Zona de Peligro</p>
+                <p className="text-xs text-muted-foreground">
+                  La eliminación permanente borra todos los datos del vecino del sistema. 
+                  Esta acción no se puede deshacer. En GoHighLevel, el contacto se marcará como "Ex-Residente".
+                </p>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setDeleteConfirmUser(detailUser)}
+                  data-testid="button-delete-permanent"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Eliminar Permanentemente
+                </Button>
+              </div>
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!deleteConfirmUser} onOpenChange={(open) => !open && setDeleteConfirmUser(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive">Eliminar Vecino Permanentemente</AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Estás completamente seguro de que deseas eliminar permanentemente a {deleteConfirmUser?.firstName && deleteConfirmUser?.lastName ? `${deleteConfirmUser.firstName} ${deleteConfirmUser.lastName}` : deleteConfirmUser?.username}?
+              <br /><br />
+              <strong>Esta acción no se puede deshacer.</strong> Todos los datos del vecino serán eliminados del sistema.
+              El contacto en GoHighLevel será marcado como "Ex-Residente" pero no será eliminado.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete">Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteConfirmUser && permanentDeleteMutation.mutate(deleteConfirmUser.id)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-delete"
+            >
+              {permanentDeleteMutation.isPending ? "Eliminando..." : "Sí, Eliminar Permanentemente"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
