@@ -146,7 +146,15 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
-              {menuItems.slice(1).map((item) => (
+              {menuItems.slice(1)
+                .filter((item) => {
+                  // Hide Proveedores from vecino role
+                  if (item.url === "/proveedores" && user?.role === "vecino") {
+                    return false;
+                  }
+                  return true;
+                })
+                .map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild isActive={location === item.url}>
                     <Link href={item.url} data-testid={`link-${item.title.toLowerCase()}`}>

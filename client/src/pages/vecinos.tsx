@@ -71,6 +71,7 @@ export default function Vecinos() {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [selectedCommunity, setSelectedCommunity] = useState<string>("all");
+  const [showActiveOnly, setShowActiveOnly] = useState(true);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [passwordUser, setPasswordUser] = useState<User | null>(null);
@@ -275,7 +276,9 @@ export default function Vecinos() {
     
     const matchesCommunity = selectedCommunity === "all" || user.communityId === selectedCommunity;
     
-    return matchesSearch && matchesCommunity;
+    const matchesActiveFilter = !showActiveOnly || user.active;
+    
+    return matchesSearch && matchesCommunity && matchesActiveFilter;
   });
 
   const onAddSubmit = (data: UserFormData) => {
@@ -564,6 +567,15 @@ export default function Vecinos() {
                 ))}
               </SelectContent>
             </Select>
+            <Button
+              variant={showActiveOnly ? "default" : "outline"}
+              onClick={() => setShowActiveOnly(!showActiveOnly)}
+              className="whitespace-nowrap"
+              data-testid="button-filter-active"
+            >
+              <UserCheck className="w-4 h-4 mr-2" />
+              {showActiveOnly ? "Solo activos" : "Todos"}
+            </Button>
           </div>
 
           <div className="rounded-md border">
