@@ -163,13 +163,7 @@ function CommunityItem({ community, isSelected, onClick }: CommunityItemProps) {
       <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
         <span>{community.city}</span>
         <span>•</span>
-        <span>{community.postalCode}</span>
-        {community.totalUnits && (
-          <>
-            <span>•</span>
-            <span>{community.totalUnits} unidades</span>
-          </>
-        )}
+        <span>{(community as any).residentCount ?? 0} residentes</span>
       </div>
     </button>
   );

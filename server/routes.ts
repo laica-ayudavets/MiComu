@@ -433,11 +433,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (user.role === "admin_fincas" && user.propertyCompanyId) {
         // Admin gets all communities from their property company
         const communities = await storage.getCommunities(user.propertyCompanyId);
-        res.json(communities);
+        
+        // Add resident count to each community
+        const communitiesWithResidentCount = await Promise.all(
+          communities.map(async (community) => {
+            const residentCount = await storage.countResidentsByCommunity(community.id);
+            return { ...community, residentCount };
+          })
+        );
+        
+        res.json(communitiesWithResidentCount);
       } else if (user.communityId) {
         // Presidente and vecino only see their community
         const community = await storage.getCommunity(user.communityId);
-        res.json(community ? [community] : []);
+        if (community) {
+          const residentCount = await storage.countResidentsByCommunity(community.id);
+          res.json([{ ...community, residentCount }]);
+        } else {
+          res.json([]);
+        }
       } else {
         res.json([]);
       }

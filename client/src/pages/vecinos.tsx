@@ -160,6 +160,7 @@ export default function Vecinos() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/communities"] });
       setIsAddDialogOpen(false);
       addForm.reset();
       setShowPassword(false);
@@ -184,6 +185,7 @@ export default function Vecinos() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/communities"] });
       setEditingUser(null);
       toast({
         title: "Vecino actualizado",
@@ -229,6 +231,7 @@ export default function Vecinos() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/communities"] });
       setDeactivateUser(null);
       toast({
         title: "Vecino desactivado",
@@ -251,6 +254,7 @@ export default function Vecinos() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/communities"] });
       setReactivateUser(null);
       toast({
         title: "Vecino reactivado",
@@ -294,6 +298,7 @@ export default function Vecinos() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/communities"] });
       setDeleteConfirmUser(null);
       setDetailUser(null);
       toast({
