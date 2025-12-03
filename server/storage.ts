@@ -57,6 +57,8 @@ export interface IStorage {
   getAllUsers(): Promise<User[]>; // Superadmin: all users across system
   getAdminFincasUsers(propertyCompanyId?: string, includeInactive?: boolean): Promise<User[]>; // Superadmin: filter by company or get all, optionally include inactive
   updateUser(id: string, updates: SuperAdminUpdateUser): Promise<User | undefined>; // Superadmin: safe update
+  updateUserNotes(id: string, notes: string): Promise<User | undefined>; // Admin: update user notes
+  deleteUserPermanently(id: string): Promise<boolean>; // Admin: permanently delete user from database
   
   // Property Company management
   getPropertyCompany(id: string): Promise<PropertyCompany | undefined>;
@@ -247,6 +249,21 @@ export class DbStorage implements IStorage {
       .where(eq(users.id, id))
       .returning();
     return result[0];
+  }
+
+  async updateUserNotes(id: string, notes: string): Promise<User | undefined> {
+    const result = await db.update(users)
+      .set({ notes })
+      .where(eq(users.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteUserPermanently(id: string): Promise<boolean> {
+    const result = await db.delete(users)
+      .where(eq(users.id, id))
+      .returning();
+    return result.length > 0;
   }
 
   // Property Company methods
