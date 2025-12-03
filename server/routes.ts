@@ -1079,7 +1079,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Admin not associated with a property company" });
       }
 
-      const { username, email, password, firstName, lastName, phone, unitNumber, role, communityId } = req.body;
+      const { username, email, password, firstName, lastName, phone, dateOfBirth, unitNumber, role, communityId } = req.body;
       
       // Validate required fields
       if (!username || !email || !password || !communityId || !firstName || !lastName) {
@@ -1116,6 +1116,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         firstName,
         lastName,
         phone: phone || null,
+        dateOfBirth: dateOfBirth || null,
         unitNumber: unitNumber || null,
         role: validRole,
         communityId,
