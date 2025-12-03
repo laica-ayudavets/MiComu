@@ -69,6 +69,7 @@ export const users = pgTable("users", {
   dateOfBirth: text("date_of_birth"), // Date of birth for GHL sync (YYYY-MM-DD format)
   unitNumber: text("unit_number"), // Apartment/unit number for residents
   active: boolean("active").notNull().default(true), // For soft-delete/disable users
+  notes: text("notes"), // Admin notes about the user
   ghlContactId: text("ghl_contact_id"), // GoHighLevel Contact ID for CRM sync
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
