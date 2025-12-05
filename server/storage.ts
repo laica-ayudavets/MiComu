@@ -54,6 +54,7 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   updateUserPassword(id: string, passwordHash: string): Promise<void>;
   updateUserGHLId(id: string, ghlContactId: string): Promise<void>; // GHL sync
+  updateUserHoldedId(id: string, holdedContactId: string): Promise<void>; // Holded sync
   getAllUsers(): Promise<User[]>; // Superadmin: all users across system
   getAdminFincasUsers(propertyCompanyId?: string, includeInactive?: boolean): Promise<User[]>; // Superadmin: filter by company or get all, optionally include inactive
   updateUser(id: string, updates: SuperAdminUpdateUser): Promise<User | undefined>; // Superadmin: safe update
@@ -75,6 +76,7 @@ export interface IStorage {
   updateCommunity(id: string, propertyCompanyId: string, updates: Partial<InsertCommunity>): Promise<Community | undefined>;
   deleteCommunity(id: string, propertyCompanyId: string): Promise<boolean>;
   updateCommunityGHLId(id: string, ghlBusinessId: string): Promise<void>; // GHL sync
+  updateProviderHoldedId(id: string, holdedContactId: string): Promise<void>; // Holded sync
   countResidentsByCommunity(communityId: string): Promise<number>; // Count active residents
   
   // Incident management (community-scoped)
@@ -218,6 +220,12 @@ export class DbStorage implements IStorage {
   async updateUserGHLId(id: string, ghlContactId: string): Promise<void> {
     await db.update(users)
       .set({ ghlContactId })
+      .where(eq(users.id, id));
+  }
+
+  async updateUserHoldedId(id: string, holdedContactId: string): Promise<void> {
+    await db.update(users)
+      .set({ holdedContactId })
       .where(eq(users.id, id));
   }
 
@@ -545,6 +553,12 @@ export class DbStorage implements IStorage {
     const result = await db.delete(providers)
       .where(and(eq(providers.id, id), eq(providers.communityId, communityId)));
     return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  async updateProviderHoldedId(id: string, holdedContactId: string): Promise<void> {
+    await db.update(providers)
+      .set({ holdedContactId })
+      .where(eq(providers.id, id));
   }
 
   // Quota Type methods (community-scoped)

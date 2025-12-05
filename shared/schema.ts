@@ -37,6 +37,7 @@ export const communities = pgTable("communities", {
   city: text("city").notNull(),
   province: text("province"),
   totalUnits: integer("total_units").notNull(), // Total number of units/apartments
+  monthlyFee: decimal("monthly_fee", { precision: 10, scale: 2 }), // Cuota mensual fija por unidad
   presidentId: varchar("president_id"), // Will be linked to users later
   ghlBusinessId: text("ghl_business_id"), // GoHighLevel Business ID for CRM sync
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -71,6 +72,7 @@ export const users = pgTable("users", {
   active: boolean("active").notNull().default(true), // For soft-delete/disable users
   notes: text("notes"), // Admin notes about the user
   ghlContactId: text("ghl_contact_id"), // GoHighLevel Contact ID for CRM sync
+  holdedContactId: text("holded_contact_id"), // Holded Contact ID for accounting sync
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -79,6 +81,7 @@ export const insertUserSchema = createInsertSchema(users).omit({
   createdAt: true,
   active: true, // Active is managed separately
   ghlContactId: true, // Set programmatically during GHL sync
+  holdedContactId: true, // Set programmatically during Holded sync
 });
 export const updateUserSchema = insertUserSchema.partial().omit({
   propertyCompanyId: true,
@@ -244,12 +247,14 @@ export const providers = pgTable("providers", {
   address: text("address"),
   rating: decimal("rating", { precision: 2, scale: 1 }),
   servicesCount: integer("services_count").default(0),
+  holdedContactId: text("holded_contact_id"), // Holded supplier contact ID
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const insertProviderSchema = createInsertSchema(providers).omit({
   id: true,
   createdAt: true,
+  holdedContactId: true, // Set programmatically during Holded sync
 });
 export const updateProviderSchema = insertProviderSchema.partial().omit({
   communityId: true,
