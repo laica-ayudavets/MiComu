@@ -1571,7 +1571,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Quota Types endpoints
+  // Quota Types endpoints (property-company scoped)
   app.get("/api/quota-types", requireAuth, async (req: Request, res: Response) => {
     try {
       const communityId = getCommunityId(req);
@@ -1583,10 +1583,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get all quota types for the property company (admin view)
+  app.get("/api/quota-types/all", requireRole("admin_fincas"), async (req: Request, res: Response) => {
+    try {
+      const user = req.user as User;
+      if (!user.propertyCompanyId) {
+        return res.status(400).json({ error: "User must belong to a property company" });
+      }
+      const quotaTypes = await storage.getQuotaTypesByPropertyCompany(user.propertyCompanyId);
+      res.json(quotaTypes);
+    } catch (error) {
+      console.error("Error fetching all quota types:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   app.get("/api/quota-types/:id", requireAuth, async (req: Request, res: Response) => {
     try {
-      const communityId = getCommunityId(req);
-      const quotaType = await storage.getQuotaType(req.params.id, communityId);
+      const user = req.user as User;
+      const propertyCompanyId = user.propertyCompanyId || (user.communityId ? (await storage.getCommunity(user.communityId))?.propertyCompanyId : undefined);
+      if (!propertyCompanyId) {
+        return res.status(400).json({ error: "Cannot determine property company" });
+      }
+      const quotaType = await storage.getQuotaType(req.params.id, propertyCompanyId);
       if (!quotaType) {
         return res.status(404).json({ error: "Quota type not found" });
       }
@@ -1597,10 +1616,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/quota-types", requireAuth, async (req: Request, res: Response) => {
+  app.post("/api/quota-types", requireRole("admin_fincas"), async (req: Request, res: Response) => {
     try {
-      const communityId = getCommunityId(req);
-      const data = insertQuotaTypeSchema.parse({ ...req.body, communityId });
+      const user = req.user as User;
+      if (!user.propertyCompanyId) {
+        return res.status(400).json({ error: "User must belong to a property company" });
+      }
+      
+      // communityId is optional - if not provided, quota type is available to all communities
+      const communityId = req.body.communityId || null;
+      
+      // If communityId is provided, verify it belongs to the user's property company
+      if (communityId) {
+        const community = await storage.getCommunity(communityId);
+        if (!community || community.propertyCompanyId !== user.propertyCompanyId) {
+          return res.status(403).json({ error: "Not authorized to create quota types for this community" });
+        }
+      }
+      
+      const data = insertQuotaTypeSchema.parse({ 
+        ...req.body, 
+        propertyCompanyId: user.propertyCompanyId,
+        communityId: communityId || undefined
+      });
       const quotaType = await storage.createQuotaType(data);
       res.status(201).json(quotaType);
     } catch (error) {
@@ -1612,11 +1650,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/quota-types/:id", requireAuth, async (req: Request, res: Response) => {
+  app.patch("/api/quota-types/:id", requireRole("admin_fincas"), async (req: Request, res: Response) => {
     try {
-      const communityId = getCommunityId(req);
+      const user = req.user as User;
+      if (!user.propertyCompanyId) {
+        return res.status(400).json({ error: "User must belong to a property company" });
+      }
       const data = updateQuotaTypeSchema.parse(req.body);
-      const quotaType = await storage.updateQuotaType(req.params.id, communityId, data);
+      const quotaType = await storage.updateQuotaType(req.params.id, user.propertyCompanyId, data);
       if (!quotaType) {
         return res.status(404).json({ error: "Quota type not found" });
       }
@@ -1630,10 +1671,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/quota-types/:id", requireAuth, async (req: Request, res: Response) => {
+  app.delete("/api/quota-types/:id", requireRole("admin_fincas"), async (req: Request, res: Response) => {
     try {
-      const communityId = getCommunityId(req);
-      const deleted = await storage.deleteQuotaType(req.params.id, communityId);
+      const user = req.user as User;
+      if (!user.propertyCompanyId) {
+        return res.status(400).json({ error: "User must belong to a property company" });
+      }
+      const deleted = await storage.deleteQuotaType(req.params.id, user.propertyCompanyId);
       if (!deleted) {
         return res.status(404).json({ error: "Quota type not found" });
       }
@@ -1824,8 +1868,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Community not found" });
       }
       
-      // Get the quota type
-      const quotaType = await storage.getQuotaType(quotaTypeId, communityId);
+      // Get the quota type using property company ID
+      const quotaType = await storage.getQuotaType(quotaTypeId, community.propertyCompanyId);
       if (!quotaType) {
         return res.status(404).json({ error: "Quota type not found" });
       }
@@ -2038,9 +2082,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         
         // Get or create the quota type for this community
-        let quotaType = await storage.getQuotaTypeByName(communityId, quotaTypeName);
+        let quotaType = await storage.getQuotaTypeByName(user.propertyCompanyId!, quotaTypeName, communityId);
         if (!quotaType) {
           quotaType = await storage.createQuotaType({
+            propertyCompanyId: user.propertyCompanyId!,
             communityId,
             name: quotaTypeName,
             description: `Cuota ${quotaTypeName}`,
@@ -2180,23 +2225,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Generate individual invoice for a specific vecino
+  // Generate individual invoice for a specific vecino (supports free-form invoices without quota type)
   app.post("/api/invoices/generate-individual", requireRole("admin_fincas"), async (req: Request, res: Response) => {
     try {
       const adminUser = req.user as User;
       const communityId = getCommunityId(req);
-      const { userId, quotaTypeId, month, year, baseAmount, taxPercentage, notes } = req.body;
+      const { userId, quotaTypeId, dueDate: dueDateStr, baseAmount, taxPercentage, notes, concept } = req.body;
       
-      // Validate required fields
-      if (!userId || !quotaTypeId || !month || !year) {
-        return res.status(400).json({ error: "User ID, quota type ID, month and year are required" });
+      // Validate required fields - either quotaTypeId or concept required for free-form
+      if (!userId) {
+        return res.status(400).json({ error: "User ID is required" });
       }
       
-      const monthNum = parseInt(month);
-      const yearNum = parseInt(year);
+      if (!quotaTypeId && !concept) {
+        return res.status(400).json({ error: "Debe especificar un tipo de cuota o un concepto" });
+      }
       
-      if (monthNum < 1 || monthNum > 12) {
-        return res.status(400).json({ error: "Invalid month" });
+      if (!dueDateStr) {
+        return res.status(400).json({ error: "La fecha de vencimiento es requerida" });
+      }
+      
+      // Parse due date (DD/MM/YYYY or ISO format)
+      let dueDate: Date;
+      if (dueDateStr.includes('/')) {
+        const parts = dueDateStr.split('/');
+        dueDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+      } else {
+        dueDate = new Date(dueDateStr);
+      }
+      
+      if (isNaN(dueDate.getTime())) {
+        return res.status(400).json({ error: "Fecha de vencimiento inválida" });
       }
       
       // Get community info and verify ownership
@@ -2210,10 +2269,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Not authorized to access this community" });
       }
       
-      // Get the quota type and verify it belongs to this community
-      const quotaType = await storage.getQuotaType(quotaTypeId, communityId);
-      if (!quotaType) {
-        return res.status(404).json({ error: "Quota type not found" });
+      // Get the quota type if provided
+      let quotaType = null;
+      if (quotaTypeId) {
+        quotaType = await storage.getQuotaType(quotaTypeId, community.propertyCompanyId);
+        if (!quotaType) {
+          return res.status(404).json({ error: "Quota type not found" });
+        }
       }
       
       // Get the user and verify they belong to this community
@@ -2225,10 +2287,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Use provided base amount or fall back to quota type amount
       const baseAmountNum = baseAmount !== undefined && !isNaN(parseFloat(baseAmount)) 
         ? parseFloat(baseAmount) 
-        : parseFloat(quotaType.amount);
+        : (quotaType ? parseFloat(quotaType.amount) : 0);
       const taxPercent = taxPercentage !== undefined && !isNaN(parseFloat(taxPercentage))
         ? parseFloat(taxPercentage) 
-        : parseFloat(quotaType.taxPercentage || "0");
+        : (quotaType?.taxPercentage ? parseFloat(quotaType.taxPercentage) : 0);
       
       if (isNaN(baseAmountNum) || baseAmountNum <= 0) {
         return res.status(400).json({ error: "El importe debe ser mayor que 0" });
@@ -2238,31 +2300,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const totalAmount = baseAmountNum * (1 + taxPercent / 100);
       const formattedTotalAmount = totalAmount.toFixed(2);
       
-      // Due date is last day of the month
-      const dueDate = new Date(yearNum, monthNum, 0);
+      // Get month/year from due date
+      const monthNum = dueDate.getMonth() + 1;
+      const yearNum = dueDate.getFullYear();
       
-      // Check if assignment already exists for this month
-      const existingAssignments = await storage.getQuotaAssignmentsByUser(userId, communityId);
-      const hasExisting = existingAssignments.some(a => {
-        const aDate = new Date(a.dueDate);
-        return aDate.getMonth() + 1 === monthNum && aDate.getFullYear() === yearNum && 
-               a.quotaTypeId === quotaType.id;
-      });
-      
-      if (hasExisting) {
-        return res.status(400).json({ error: "Ya existe una cuota de este tipo para este mes y usuario" });
+      // For typed quotas, check for duplicates
+      if (quotaType) {
+        const existingAssignments = await storage.getQuotaAssignmentsByUser(userId, communityId);
+        const hasExisting = existingAssignments.some(a => {
+          const aDate = new Date(a.dueDate);
+          return aDate.getMonth() + 1 === monthNum && aDate.getFullYear() === yearNum && 
+                 a.quotaTypeId === quotaType!.id;
+        });
+        
+        if (hasExisting) {
+          return res.status(400).json({ error: "Ya existe una cuota de este tipo para este mes y usuario" });
+        }
       }
       
       // Create the quota assignment
-      const noteText = notes || `${quotaType.name} ${monthNum.toString().padStart(2, '0')}/${yearNum}`;
+      const invoiceConcept = concept || quotaType?.name || "Cuota";
+      const noteText = notes || `${invoiceConcept} ${monthNum.toString().padStart(2, '0')}/${yearNum}`;
       const assignment = await storage.createQuotaAssignment({
         communityId,
-        quotaTypeId: quotaType.id,
+        quotaTypeId: quotaType?.id || undefined,
         userId,
         amount: formattedTotalAmount,
         dueDate,
         status: "pendiente",
         notes: noteText,
+        concept: concept || undefined,
+        taxPercentage: String(taxPercent),
         periodMonth: monthNum,
         periodYear: yearNum,
       });
@@ -2287,7 +2355,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const holdedInvoiceId = await createHoldedInvoice({
               contactId: holdedContactId,
               items: [{
-                name: quotaType.name,
+                name: invoiceConcept,
                 desc: `${noteText} - ${community.name}`,
                 units: 1,
                 subtotal: baseAmountNum,
@@ -2382,20 +2450,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      const quotaType = await storage.getQuotaType(assignment.quotaTypeId, communityId);
+      // Get quota type if available (for typed quotas), or use concept for free-form
+      const quotaType = assignment.quotaTypeId 
+        ? await storage.getQuotaType(assignment.quotaTypeId, community?.propertyCompanyId || "") 
+        : null;
+      
+      // Use concept for free-form invoices, quota type name otherwise
+      const invoiceName = assignment.concept || quotaType?.name || "Cuota de comunidad";
+      const invoiceTax = assignment.taxPercentage 
+        ? parseFloat(assignment.taxPercentage) 
+        : (quotaType?.taxPercentage ? parseFloat(quotaType.taxPercentage) : 0);
       
       const holdedInvoiceId = await createHoldedInvoice({
         contactId: holdedContactId,
         items: [{
-          name: quotaType?.name || "Cuota de comunidad",
+          name: invoiceName,
           desc: assignment.notes || "",
           units: 1,
           subtotal: parseFloat(assignment.amount),
-          tax: 0, // Community fees typically don't have IVA
+          tax: invoiceTax,
         }],
         date: new Date(),
         dueDate: new Date(assignment.dueDate),
-        notes: `Cuota ${quotaType?.name} - ${community?.name || ""}`,
+        notes: `${invoiceName} - ${community?.name || ""}`,
       });
       
       if (!holdedInvoiceId) {
@@ -2598,11 +2675,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Map Holded status to our status
-      let newStatus = assignment.status;
+      let newStatus: "pendiente" | "pagada" | "vencida" = assignment.status;
       if (syncedData.status === 2) {
         newStatus = "pagada";
       } else if (syncedData.status === 3) {
-        newStatus = "deudor";
+        newStatus = "vencida"; // Late payment = vencida
       } else if (syncedData.status === 1) {
         newStatus = "pendiente";
       }

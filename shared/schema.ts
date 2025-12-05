@@ -272,10 +272,11 @@ export const meetingTypeEnum = pgEnum("meeting_type", ["ordinaria", "extraordina
 export const meetingStatusEnum = pgEnum("meeting_status", ["convocada", "celebrada", "cancelada"]);
 export const attendanceTypeEnum = pgEnum("attendance_type", ["asistente", "representado", "ausente"]);
 
-// Quota Types - Define types of quotas for a community (up to 10)
+// Quota Types - Define types of quotas (property-company scoped, optionally community-specific)
 export const quotaTypes = pgTable("quota_types", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  communityId: varchar("community_id").notNull().references(() => communities.id, { onDelete: "cascade" }),
+  propertyCompanyId: varchar("property_company_id").notNull().references(() => propertyCompanies.id, { onDelete: "cascade" }),
+  communityId: varchar("community_id").references(() => communities.id, { onDelete: "cascade" }), // Null = available to all communities
   name: text("name").notNull(), // e.g., "Cuota ordinaria", "Cuota extraordinaria", "Gastos agua"
   description: text("description"),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(), // Base amount before tax
@@ -290,6 +291,7 @@ export const insertQuotaTypeSchema = createInsertSchema(quotaTypes).omit({
   createdAt: true,
 });
 export const updateQuotaTypeSchema = insertQuotaTypeSchema.partial().omit({
+  propertyCompanyId: true,
   communityId: true,
 });
 export type InsertQuotaType = z.infer<typeof insertQuotaTypeSchema>;
@@ -300,13 +302,15 @@ export type QuotaType = typeof quotaTypes.$inferSelect;
 export const quotaAssignments = pgTable("quota_assignments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   communityId: varchar("community_id").notNull().references(() => communities.id, { onDelete: "cascade" }),
-  quotaTypeId: varchar("quota_type_id").notNull().references(() => quotaTypes.id, { onDelete: "cascade" }),
+  quotaTypeId: varchar("quota_type_id").references(() => quotaTypes.id, { onDelete: "cascade" }), // Optional for free-form invoices
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }), // Vecino
   status: quotaPaymentStatusEnum("status").notNull().default("pendiente"),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(), // Can differ from quota type if adjusted
   dueDate: timestamp("due_date").notNull(),
   paidDate: timestamp("paid_date"),
   notes: text("notes"), // Optional notes (e.g., payment method, discount reason)
+  concept: text("concept"), // For free-form invoices - description of what the charge is for
+  taxPercentage: decimal("tax_percentage", { precision: 5, scale: 2 }), // For free-form invoices - tax percentage
   // Holded integration fields
   holdedInvoiceId: text("holded_invoice_id"), // Holded document ID
   holdedDocNumber: text("holded_doc_number"), // Invoice number in Holded (e.g., "F2024-001")
@@ -338,6 +342,8 @@ export const fullUpdateQuotaAssignmentSchema = z.object({
   dueDate: z.coerce.date().optional(),
   paidDate: z.coerce.date().optional().nullable(),
   notes: z.string().optional().nullable(),
+  concept: z.string().optional().nullable(),
+  taxPercentage: z.string().optional().nullable(),
   holdedInvoiceId: z.string().optional().nullable(),
   holdedDocNumber: z.string().optional().nullable(),
   holdedStatus: z.number().optional().nullable(),

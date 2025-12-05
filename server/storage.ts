@@ -45,7 +45,7 @@ import {
   meetingAgendaItems,
   meetingAttendances
 } from "@shared/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, or } from "drizzle-orm";
 
 export interface IStorage {
   // User management
@@ -121,13 +121,14 @@ export interface IStorage {
   updateProvider(id: string, communityId: string, updates: Partial<InsertProvider>): Promise<Provider | undefined>;
   deleteProvider(id: string, communityId: string): Promise<boolean>;
   
-  // Quota Type management (community-scoped)
+  // Quota Type management (property-company scoped, optionally community-specific)
   getQuotaTypes(communityId: string): Promise<QuotaType[]>;
-  getQuotaType(id: string, communityId: string): Promise<QuotaType | undefined>;
-  getQuotaTypeByName(communityId: string, name: string): Promise<QuotaType | undefined>;
+  getQuotaTypesByPropertyCompany(propertyCompanyId: string): Promise<QuotaType[]>;
+  getQuotaType(id: string, propertyCompanyId: string): Promise<QuotaType | undefined>;
+  getQuotaTypeByName(propertyCompanyId: string, name: string, communityId?: string): Promise<QuotaType | undefined>;
   createQuotaType(quotaType: InsertQuotaType): Promise<QuotaType>;
-  updateQuotaType(id: string, communityId: string, updates: Partial<InsertQuotaType>): Promise<QuotaType | undefined>;
-  deleteQuotaType(id: string, communityId: string): Promise<boolean>;
+  updateQuotaType(id: string, propertyCompanyId: string, updates: Partial<InsertQuotaType>): Promise<QuotaType | undefined>;
+  deleteQuotaType(id: string, propertyCompanyId: string): Promise<boolean>;
   
   // Quota Assignment management (community-scoped)
   getQuotaAssignments(communityId: string): Promise<QuotaAssignment[]>;
@@ -572,23 +573,52 @@ export class DbStorage implements IStorage {
       .where(eq(providers.id, id));
   }
 
-  // Quota Type methods (community-scoped)
+  // Quota Type methods (property-company scoped, optionally community-specific)
   async getQuotaTypes(communityId: string): Promise<QuotaType[]> {
+    // Get quota types for a specific community OR global quota types for the same property company
+    const community = await this.getCommunity(communityId);
+    if (!community) return [];
+    
     return db.select().from(quotaTypes)
-      .where(eq(quotaTypes.communityId, communityId))
+      .where(and(
+        eq(quotaTypes.propertyCompanyId, community.propertyCompanyId),
+        or(
+          eq(quotaTypes.communityId, communityId),
+          sql`${quotaTypes.communityId} IS NULL`
+        )
+      ))
       .orderBy(desc(quotaTypes.createdAt));
   }
 
-  async getQuotaType(id: string, communityId: string): Promise<QuotaType | undefined> {
+  async getQuotaTypesByPropertyCompany(propertyCompanyId: string): Promise<QuotaType[]> {
+    return db.select().from(quotaTypes)
+      .where(eq(quotaTypes.propertyCompanyId, propertyCompanyId))
+      .orderBy(desc(quotaTypes.createdAt));
+  }
+
+  async getQuotaType(id: string, propertyCompanyId: string): Promise<QuotaType | undefined> {
     const result = await db.select().from(quotaTypes)
-      .where(and(eq(quotaTypes.id, id), eq(quotaTypes.communityId, communityId)))
+      .where(and(eq(quotaTypes.id, id), eq(quotaTypes.propertyCompanyId, propertyCompanyId)))
       .limit(1);
     return result[0];
   }
 
-  async getQuotaTypeByName(communityId: string, name: string): Promise<QuotaType | undefined> {
+  async getQuotaTypeByName(propertyCompanyId: string, name: string, communityId?: string): Promise<QuotaType | undefined> {
+    // Look for an exact match (same name, same community or global)
+    const conditions = [
+      eq(quotaTypes.propertyCompanyId, propertyCompanyId),
+      eq(quotaTypes.name, name)
+    ];
+    
+    if (communityId) {
+      conditions.push(or(
+        eq(quotaTypes.communityId, communityId),
+        sql`${quotaTypes.communityId} IS NULL`
+      )!);
+    }
+    
     const result = await db.select().from(quotaTypes)
-      .where(and(eq(quotaTypes.communityId, communityId), eq(quotaTypes.name, name)))
+      .where(and(...conditions))
       .limit(1);
     return result[0];
   }
@@ -598,17 +628,17 @@ export class DbStorage implements IStorage {
     return result[0];
   }
 
-  async updateQuotaType(id: string, communityId: string, updates: Partial<InsertQuotaType>): Promise<QuotaType | undefined> {
+  async updateQuotaType(id: string, propertyCompanyId: string, updates: Partial<InsertQuotaType>): Promise<QuotaType | undefined> {
     const result = await db.update(quotaTypes)
       .set(updates)
-      .where(and(eq(quotaTypes.id, id), eq(quotaTypes.communityId, communityId)))
+      .where(and(eq(quotaTypes.id, id), eq(quotaTypes.propertyCompanyId, propertyCompanyId)))
       .returning();
     return result[0];
   }
 
-  async deleteQuotaType(id: string, communityId: string): Promise<boolean> {
+  async deleteQuotaType(id: string, propertyCompanyId: string): Promise<boolean> {
     const result = await db.delete(quotaTypes)
-      .where(and(eq(quotaTypes.id, id), eq(quotaTypes.communityId, communityId)));
+      .where(and(eq(quotaTypes.id, id), eq(quotaTypes.propertyCompanyId, propertyCompanyId)));
     return result.rowCount !== null && result.rowCount > 0;
   }
 
