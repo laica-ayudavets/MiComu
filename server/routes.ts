@@ -2154,19 +2154,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const currentUser = (req as any).user;
       const isAdmin = currentUser.role === "admin_fincas" || currentUser.role === "superadmin";
-      const communityId = getCommunityId(req);
       
-      const assignment = await storage.getQuotaAssignment(req.params.id, communityId);
+      // SECURITY: Fetch by ID only (not community-scoped) to prevent enumeration
+      // Then validate ownership explicitly before any access
+      const assignment = await storage.getQuotaAssignmentById(req.params.id);
       if (!assignment) {
         return res.status(404).json({ error: "Quota assignment not found" });
       }
       
-      // CRITICAL: Ownership check - residents can only access their own invoices
-      // Admins can access any invoice in their managed communities
+      // CRITICAL: Ownership check - residents can ONLY access their own invoices
+      // Admins can access invoices in their managed communities
       const isOwner = assignment.userId === currentUser.id;
       if (!isAdmin && !isOwner) {
         console.warn(`[Security] User ${currentUser.id} attempted to access invoice ${req.params.id} belonging to user ${assignment.userId}`);
-        return res.status(403).json({ error: "No tienes permiso para descargar esta factura" });
+        return res.status(404).json({ error: "Quota assignment not found" }); // Return 404 to avoid revealing existence
+      }
+      
+      // Additional check for admins: ensure they can only access communities they manage
+      if (isAdmin && !isOwner) {
+        const communityId = getCommunityId(req);
+        if (assignment.communityId !== communityId) {
+          console.warn(`[Security] Admin ${currentUser.id} attempted to access invoice from unmanaged community ${assignment.communityId}`);
+          return res.status(404).json({ error: "Quota assignment not found" });
+        }
       }
       
       if (!assignment.holdedInvoiceId) {

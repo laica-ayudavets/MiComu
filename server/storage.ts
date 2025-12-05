@@ -132,6 +132,7 @@ export interface IStorage {
   // Quota Assignment management (community-scoped)
   getQuotaAssignments(communityId: string): Promise<QuotaAssignment[]>;
   getQuotaAssignment(id: string, communityId: string): Promise<QuotaAssignment | undefined>;
+  getQuotaAssignmentById(id: string): Promise<QuotaAssignment | undefined>; // For ownership-sensitive operations
   getQuotaAssignmentsByUser(userId: string, communityId: string): Promise<QuotaAssignment[]>;
   getQuotaAssignmentsByQuotaType(quotaTypeId: string, communityId: string): Promise<QuotaAssignment[]>;
   createQuotaAssignment(assignment: InsertQuotaAssignment): Promise<QuotaAssignment>;
@@ -621,6 +622,14 @@ export class DbStorage implements IStorage {
   async getQuotaAssignment(id: string, communityId: string): Promise<QuotaAssignment | undefined> {
     const result = await db.select().from(quotaAssignments)
       .where(and(eq(quotaAssignments.id, id), eq(quotaAssignments.communityId, communityId)))
+      .limit(1);
+    return result[0];
+  }
+
+  // Fetch by ID only - for ownership-sensitive operations where we validate ownership in the route
+  async getQuotaAssignmentById(id: string): Promise<QuotaAssignment | undefined> {
+    const result = await db.select().from(quotaAssignments)
+      .where(eq(quotaAssignments.id, id))
       .limit(1);
     return result[0];
   }
