@@ -17,8 +17,9 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
-import { useCurrentCommunity, useUser } from "@/hooks/use-auth";
-import { Plus, Pencil, Trash2, AlertCircle, CheckCircle, Clock, Euro, CalendarIcon, FileText, Users, Zap } from "lucide-react";
+import { useCurrentCommunity, useUser, useCommunities } from "@/hooks/use-auth";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Plus, Pencil, Trash2, AlertCircle, CheckCircle, Clock, Euro, CalendarIcon, FileText, Users, Zap, Building2 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -60,9 +61,13 @@ export default function Cuotas() {
   const [individualBaseAmount, setIndividualBaseAmount] = useState("");
   const [individualTaxPercentage, setIndividualTaxPercentage] = useState("0");
   const [individualNotes, setIndividualNotes] = useState("");
+  const [multiCommunityDialogOpen, setMultiCommunityDialogOpen] = useState(false);
+  const [selectedCommunityIds, setSelectedCommunityIds] = useState<string[]>([]);
+  const [multiQuotaType, setMultiQuotaType] = useState<QuotaType | null>(null);
   const { toast } = useToast();
   const { data: currentCommunity } = useCurrentCommunity();
   const { data: currentUser } = useUser();
+  const { data: allCommunities = [] } = useCommunities();
   
   const isAdmin = currentUser?.role === "admin_fincas";
 
@@ -321,6 +326,52 @@ export default function Cuotas() {
     },
   });
 
+  const generateMultiCommunityMutation = useMutation({
+    mutationFn: async ({ 
+      communityIds, 
+      quotaTypeName,
+      baseAmount, 
+      taxPercent,
+      month,
+      year,
+    }: { 
+      communityIds: string[]; 
+      quotaTypeName: string;
+      baseAmount: string; 
+      taxPercent: string;
+      month: string;
+      year: string;
+    }) => {
+      const res = await apiRequest("POST", "/api/invoices/generate-multi-community", { 
+        communityIds,
+        quotaTypeName,
+        month, 
+        year,
+        baseAmount: parseFloat(baseAmount),
+        taxPercentage: parseFloat(taxPercent),
+      });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/quota-assignments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/quota-types"] });
+      setMultiCommunityDialogOpen(false);
+      setSelectedCommunityIds([]);
+      setMultiQuotaType(null);
+      toast({
+        title: "Cuotas generadas",
+        description: `Se han generado cuotas en ${data.communitiesProcessed} comunidades. Total: ${data.totalCreated} cuotas creadas.`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const markPaidMutation = useMutation({
     mutationFn: async ({ id, paidDate }: { id: string; paidDate?: Date }) => {
       const res = await apiRequest("POST", `/api/quota-assignments/${id}/mark-paid`, { paidDate });
@@ -525,14 +576,26 @@ export default function Cuotas() {
                 </span>
               </div>
               {isAdmin && (
-                <Button 
-                  variant="outline"
-                  onClick={() => setIndividualDialogOpen(true)}
-                  data-testid="button-generate-individual"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Cuota Individual
-                </Button>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline"
+                    onClick={() => setIndividualDialogOpen(true)}
+                    data-testid="button-generate-individual"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Cuota Individual
+                  </Button>
+                  {allCommunities.length > 1 && (
+                    <Button 
+                      variant="outline"
+                      onClick={() => setMultiCommunityDialogOpen(true)}
+                      data-testid="button-generate-multi-community"
+                    >
+                      <Building2 className="w-4 h-4 mr-2" />
+                      Multi-Comunidad
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
           </div>
@@ -1427,6 +1490,202 @@ export default function Cuotas() {
               data-testid="button-confirm-individual"
             >
               {generateIndividualMutation.isPending ? "Generando..." : "Generar Cuota"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={multiCommunityDialogOpen} onOpenChange={(open) => {
+        setMultiCommunityDialogOpen(open);
+        if (!open) {
+          setSelectedCommunityIds([]);
+          setMultiQuotaType(null);
+          setBaseAmount("");
+          setTaxPercentage("0");
+        }
+      }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Generación Multi-Comunidad</DialogTitle>
+            <DialogDescription>
+              Genera cuotas para múltiples comunidades a la vez
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Comunidades</label>
+              <div className="rounded-md border p-3 max-h-48 overflow-y-auto space-y-2">
+                <div className="flex items-center gap-2 pb-2 border-b">
+                  <Checkbox 
+                    id="select-all-communities"
+                    checked={selectedCommunityIds.length === allCommunities.length}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setSelectedCommunityIds(allCommunities.map(c => c.id));
+                      } else {
+                        setSelectedCommunityIds([]);
+                      }
+                    }}
+                    data-testid="checkbox-select-all-communities"
+                  />
+                  <label htmlFor="select-all-communities" className="text-sm font-medium cursor-pointer">
+                    Seleccionar todas ({allCommunities.length})
+                  </label>
+                </div>
+                {allCommunities.map((community) => (
+                  <div key={community.id} className="flex items-center gap-2">
+                    <Checkbox 
+                      id={`community-${community.id}`}
+                      checked={selectedCommunityIds.includes(community.id)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setSelectedCommunityIds([...selectedCommunityIds, community.id]);
+                        } else {
+                          setSelectedCommunityIds(selectedCommunityIds.filter(id => id !== community.id));
+                        }
+                      }}
+                      data-testid={`checkbox-community-${community.id}`}
+                    />
+                    <label htmlFor={`community-${community.id}`} className="text-sm cursor-pointer">
+                      {community.name}
+                    </label>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {selectedCommunityIds.length} comunidad(es) seleccionada(s)
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Tipo de Cuota (nombre)</label>
+              <Input
+                value={multiQuotaType?.name || ""}
+                onChange={(e) => setMultiQuotaType({ ...multiQuotaType, name: e.target.value } as QuotaType)}
+                placeholder="Ej: Cuota Ordinaria Mensual"
+                data-testid="input-multi-quota-type-name"
+              />
+              <p className="text-xs text-muted-foreground">
+                Se creará un tipo de cuota con este nombre en cada comunidad si no existe
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Mes</label>
+                <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                  <SelectTrigger data-testid="select-multi-month">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">Enero</SelectItem>
+                    <SelectItem value="2">Febrero</SelectItem>
+                    <SelectItem value="3">Marzo</SelectItem>
+                    <SelectItem value="4">Abril</SelectItem>
+                    <SelectItem value="5">Mayo</SelectItem>
+                    <SelectItem value="6">Junio</SelectItem>
+                    <SelectItem value="7">Julio</SelectItem>
+                    <SelectItem value="8">Agosto</SelectItem>
+                    <SelectItem value="9">Septiembre</SelectItem>
+                    <SelectItem value="10">Octubre</SelectItem>
+                    <SelectItem value="11">Noviembre</SelectItem>
+                    <SelectItem value="12">Diciembre</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Año</label>
+                <Select value={selectedYear} onValueChange={setSelectedYear}>
+                  <SelectTrigger data-testid="select-multi-year">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="2024">2024</SelectItem>
+                    <SelectItem value="2025">2025</SelectItem>
+                    <SelectItem value="2026">2026</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Base Imponible (sin IVA)</label>
+              <div className="relative">
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={baseAmount}
+                  onChange={(e) => setBaseAmount(e.target.value)}
+                  placeholder="0.00"
+                  className="pr-8"
+                  data-testid="input-multi-base-amount"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">€</span>
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Porcentaje de IVA</label>
+              <Select value={taxPercentage} onValueChange={setTaxPercentage}>
+                <SelectTrigger data-testid="select-multi-tax-percentage">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">0% (Sin IVA)</SelectItem>
+                  <SelectItem value="4">4% (IVA Superreducido)</SelectItem>
+                  <SelectItem value="10">10% (IVA Reducido)</SelectItem>
+                  <SelectItem value="21">21% (IVA General)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {baseAmount && parseFloat(baseAmount) > 0 && (
+              <div className="rounded-md bg-muted p-3 space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Base imponible:</span>
+                  <span className="font-medium">
+                    {parseFloat(baseAmount).toFixed(2)}€
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">IVA ({taxPercentage}%):</span>
+                  <span className="font-medium">
+                    {(parseFloat(baseAmount) * parseFloat(taxPercentage) / 100).toFixed(2)}€
+                  </span>
+                </div>
+                <div className="flex justify-between border-t pt-1">
+                  <span className="font-medium">Total a pagar:</span>
+                  <span className="font-bold">{(parseFloat(baseAmount) * (1 + parseFloat(taxPercentage) / 100)).toFixed(2)}€</span>
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMultiCommunityDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={() => multiQuotaType?.name && generateMultiCommunityMutation.mutate({ 
+                communityIds: selectedCommunityIds,
+                quotaTypeName: multiQuotaType.name,
+                month: selectedMonth, 
+                year: selectedYear,
+                baseAmount: baseAmount,
+                taxPercent: taxPercentage,
+              })}
+              disabled={
+                generateMultiCommunityMutation.isPending || 
+                selectedCommunityIds.length === 0 ||
+                !multiQuotaType?.name ||
+                !baseAmount || 
+                parseFloat(baseAmount) <= 0
+              }
+              data-testid="button-confirm-multi-community"
+            >
+              {generateMultiCommunityMutation.isPending 
+                ? "Generando..." 
+                : `Generar en ${selectedCommunityIds.length} Comunidades`}
             </Button>
           </DialogFooter>
         </DialogContent>

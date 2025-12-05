@@ -1972,9 +1972,218 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Generate invoices for multiple communities at once
+  app.post("/api/invoices/generate-multi-community", requireRole("admin_fincas"), async (req: Request, res: Response) => {
+    try {
+      const user = req.user as User;
+      const { communityIds, quotaTypeName, month, year, baseAmount, taxPercentage } = req.body;
+      
+      // Validate required fields
+      if (!communityIds || !Array.isArray(communityIds) || communityIds.length === 0) {
+        return res.status(400).json({ error: "At least one community ID is required" });
+      }
+      
+      if (!quotaTypeName || !month || !year) {
+        return res.status(400).json({ error: "Quota type name, month and year are required" });
+      }
+      
+      const monthNum = parseInt(month);
+      const yearNum = parseInt(year);
+      
+      if (monthNum < 1 || monthNum > 12) {
+        return res.status(400).json({ error: "Invalid month" });
+      }
+      
+      // Use provided base amount and tax percentage
+      const baseAmountNum = baseAmount !== undefined && !isNaN(parseFloat(baseAmount)) 
+        ? parseFloat(baseAmount) 
+        : 0;
+      const taxPercent = taxPercentage !== undefined && !isNaN(parseFloat(taxPercentage))
+        ? parseFloat(taxPercentage) 
+        : 0;
+      
+      if (isNaN(baseAmountNum) || baseAmountNum <= 0) {
+        return res.status(400).json({ error: "El importe debe ser mayor que 0" });
+      }
+      
+      // Calculate total amount from base amount + tax
+      const totalAmount = baseAmountNum * (1 + taxPercent / 100);
+      const formattedTotalAmount = totalAmount.toFixed(2);
+      
+      // Due date is last day of the month
+      const dueDate = new Date(yearNum, monthNum, 0);
+      
+      const holdedConfigured = isHoldedConfigured();
+      const results: {
+        communityId: string;
+        communityName: string;
+        created: number;
+        skipped: number;
+        errors: string[];
+      }[] = [];
+      
+      // Process each community
+      for (const communityId of communityIds) {
+        // Verify community belongs to the user's property company
+        const community = await storage.getCommunity(communityId);
+        if (!community || community.propertyCompanyId !== user.propertyCompanyId) {
+          results.push({
+            communityId,
+            communityName: community?.name || "Unknown",
+            created: 0,
+            skipped: 0,
+            errors: ["Community not found or not accessible"],
+          });
+          continue;
+        }
+        
+        // Get or create the quota type for this community
+        let quotaType = await storage.getQuotaTypeByName(communityId, quotaTypeName);
+        if (!quotaType) {
+          quotaType = await storage.createQuotaType({
+            communityId,
+            name: quotaTypeName,
+            description: `Cuota ${quotaTypeName}`,
+            amount: formattedTotalAmount,
+            taxPercentage: String(taxPercent),
+            frequency: "mensual",
+            isActive: true,
+          });
+        }
+        
+        if (!quotaType) {
+          results.push({
+            communityId,
+            communityName: community.name,
+            created: 0,
+            skipped: 0,
+            errors: ["Failed to create quota type"],
+          });
+          continue;
+        }
+        
+        // Get all active vecinos in this community
+        const vecinos = await storage.getUsersByCommunity(communityId);
+        const activeVecinos = vecinos.filter(v => v.active && (v.role === "vecino" || v.role === "presidente"));
+        
+        let created = 0;
+        let skipped = 0;
+        const errors: string[] = [];
+        
+        for (const vecino of activeVecinos) {
+          // Check if assignment already exists for this month
+          const existingAssignments = await storage.getQuotaAssignmentsByUser(vecino.id, communityId);
+          const hasExisting = existingAssignments.some(a => {
+            const aDate = new Date(a.dueDate);
+            return aDate.getMonth() + 1 === monthNum && aDate.getFullYear() === yearNum && 
+                   a.quotaTypeId === quotaType!.id;
+          });
+          
+          if (hasExisting) {
+            skipped++;
+            continue;
+          }
+          
+          // Create the quota assignment
+          const assignment = await storage.createQuotaAssignment({
+            communityId,
+            quotaTypeId: quotaType.id,
+            userId: vecino.id,
+            amount: formattedTotalAmount,
+            dueDate,
+            status: "pendiente",
+            notes: `${quotaTypeName} ${monthNum.toString().padStart(2, '0')}/${yearNum}`,
+            periodMonth: monthNum,
+            periodYear: yearNum,
+          });
+          
+          // Sync to Holded if configured
+          if (holdedConfigured) {
+            try {
+              let holdedContactId = vecino.holdedContactId;
+              if (!holdedContactId) {
+                holdedContactId = await createHoldedContact(vecino, community);
+                if (holdedContactId) {
+                  await storage.updateUserHoldedId(vecino.id, holdedContactId);
+                }
+              }
+              
+              if (holdedContactId) {
+                const holdedInvoiceId = await createHoldedInvoice({
+                  contactId: holdedContactId,
+                  items: [{
+                    name: quotaTypeName,
+                    desc: `${quotaTypeName} ${monthNum.toString().padStart(2, '0')}/${yearNum} - ${community.name}`,
+                    units: 1,
+                    subtotal: baseAmountNum,
+                    tax: taxPercent,
+                  }],
+                  date: new Date(),
+                  dueDate: dueDate,
+                  notes: `Comunidad: ${community.name}`,
+                });
+                
+                if (holdedInvoiceId) {
+                  const invoiceDetails = await getHoldedInvoice(holdedInvoiceId);
+                  await storage.updateQuotaAssignmentFull(assignment.id, communityId, {
+                    holdedInvoiceId,
+                    holdedDocNumber: invoiceDetails?.docNumber || null,
+                    holdedStatus: invoiceDetails?.status ?? 1,
+                    holdedSyncedAt: new Date(),
+                  });
+                  
+                  if (vecino.email) {
+                    sendInvoiceByEmail(holdedInvoiceId, vecino.email).catch(err => {
+                      console.error(`[Holded] Failed to send invoice to ${vecino.email}:`, err);
+                    });
+                  }
+                }
+              }
+            } catch (holdedError) {
+              console.error(`[Holded] Error syncing invoice for user ${vecino.id}:`, holdedError);
+              // Don't expose Holded errors to client - invoice was created locally
+            }
+          }
+          
+          created++;
+        }
+        
+        results.push({
+          communityId,
+          communityName: community.name,
+          created,
+          skipped,
+          errors: errors.length > 0 ? ["Error procesando algunos vecinos"] : [],
+        });
+      }
+      
+      const totalCreated = results.reduce((sum, r) => sum + r.created, 0);
+      const totalSkipped = results.reduce((sum, r) => sum + r.skipped, 0);
+      
+      res.status(201).json({
+        success: true,
+        communitiesProcessed: results.length,
+        totalCreated,
+        totalSkipped,
+        results: results.map(r => ({
+          communityId: r.communityId,
+          communityName: r.communityName,
+          created: r.created,
+          skipped: r.skipped,
+          hasErrors: r.errors.length > 0,
+        })),
+        holdedSync: { configured: holdedConfigured },
+      });
+    } catch (error) {
+      console.error("Error generating multi-community invoices:", error);
+      res.status(500).json({ error: "Error al generar cuotas" });
+    }
+  });
+
   // Generate individual invoice for a specific vecino
   app.post("/api/invoices/generate-individual", requireRole("admin_fincas"), async (req: Request, res: Response) => {
     try {
+      const adminUser = req.user as User;
       const communityId = getCommunityId(req);
       const { userId, quotaTypeId, month, year, baseAmount, taxPercentage, notes } = req.body;
       
@@ -1990,21 +2199,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid month" });
       }
       
-      // Get community info
+      // Get community info and verify ownership
       const community = await storage.getCommunity(communityId);
       if (!community) {
         return res.status(404).json({ error: "Community not found" });
       }
       
-      // Get the quota type
+      // Verify community belongs to admin's property company
+      if (community.propertyCompanyId !== adminUser.propertyCompanyId) {
+        return res.status(403).json({ error: "Not authorized to access this community" });
+      }
+      
+      // Get the quota type and verify it belongs to this community
       const quotaType = await storage.getQuotaType(quotaTypeId, communityId);
       if (!quotaType) {
         return res.status(404).json({ error: "Quota type not found" });
       }
       
-      // Get the user
-      const user = await storage.getUser(userId);
-      if (!user || user.communityId !== communityId) {
+      // Get the user and verify they belong to this community
+      const targetUser = await storage.getUser(userId);
+      if (!targetUser || targetUser.communityId !== communityId) {
         return res.status(404).json({ error: "User not found in this community" });
       }
       
@@ -2060,11 +2274,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (holdedConfigured) {
         try {
           // Ensure user has a Holded contact
-          let holdedContactId = user.holdedContactId;
+          let holdedContactId = targetUser.holdedContactId;
           if (!holdedContactId) {
-            holdedContactId = await createHoldedContact(user, community);
+            holdedContactId = await createHoldedContact(targetUser, community);
             if (holdedContactId) {
-              await storage.updateUserHoldedId(user.id, holdedContactId);
+              await storage.updateUserHoldedId(targetUser.id, holdedContactId);
             }
           }
           
@@ -2099,20 +2313,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
               holdedResult = { holdedInvoiceId };
               
               // Send invoice by email
-              if (user.email) {
-                sendInvoiceByEmail(holdedInvoiceId, user.email).catch(err => {
-                  console.error(`[Holded] Failed to send invoice to ${user.email}:`, err);
+              if (targetUser.email) {
+                sendInvoiceByEmail(holdedInvoiceId, targetUser.email).catch(err => {
+                  console.error(`[Holded] Failed to send invoice to ${targetUser.email}:`, err);
                 });
               }
             } else {
-              holdedResult = { error: "Failed to create Holded invoice" };
+              holdedResult = { error: "Error al crear la factura" };
             }
           } else {
-            holdedResult = { error: "Failed to create Holded contact" };
+            holdedResult = { error: "Error al crear el contacto" };
           }
         } catch (holdedError) {
           console.error(`[Holded] Error syncing individual invoice:`, holdedError);
-          holdedResult = { error: String(holdedError) };
+          holdedResult = { error: "Error al sincronizar con el sistema de facturación" };
         }
       }
       
