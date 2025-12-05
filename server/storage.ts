@@ -57,6 +57,7 @@ export interface IStorage {
   updateUserHoldedId(id: string, holdedContactId: string): Promise<void>; // Holded sync
   getAllUsers(): Promise<User[]>; // Superadmin: all users across system
   getAdminFincasUsers(propertyCompanyId?: string, includeInactive?: boolean): Promise<User[]>; // Superadmin: filter by company or get all, optionally include inactive
+  getUsersByCommunity(communityId: string): Promise<User[]>; // Get all users in a community
   updateUser(id: string, updates: SuperAdminUpdateUser): Promise<User | undefined>; // Superadmin: safe update
   updateUserNotes(id: string, notes: string): Promise<User | undefined>; // Admin: update user notes
   deleteUserPermanently(id: string): Promise<boolean>; // Admin: permanently delete user from database
@@ -249,6 +250,12 @@ export class DbStorage implements IStorage {
     
     return db.select().from(users)
       .where(and(...conditions))
+      .orderBy(desc(users.createdAt));
+  }
+
+  async getUsersByCommunity(communityId: string): Promise<User[]> {
+    return db.select().from(users)
+      .where(eq(users.communityId, communityId))
       .orderBy(desc(users.createdAt));
   }
 
