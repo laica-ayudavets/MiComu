@@ -1779,7 +1779,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/quota-assignments/:id", requireAuth, async (req: Request, res: Response) => {
+  // Delete quota assignment - admin only
+  app.delete("/api/quota-assignments/:id", requireRole("admin_fincas"), async (req: Request, res: Response) => {
     try {
       const communityId = getCommunityId(req);
       const deleted = await storage.deleteQuotaAssignment(req.params.id, communityId);
