@@ -2411,6 +2411,160 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Internal server error" });
     }
   });
+
+  // Generate free-form invoice (one-off payment without quota type)
+  app.post("/api/invoices/generate-freeform", requireRole("admin_fincas"), async (req: Request, res: Response) => {
+    try {
+      const adminUser = req.user as User;
+      const communityId = getCommunityId(req);
+      const { userId, concept, baseAmount, taxPercentage, dueDate: dueDateStr, notes } = req.body;
+      
+      // Validate required fields
+      if (!userId) {
+        return res.status(400).json({ error: "El vecino es requerido" });
+      }
+      
+      if (!concept || !concept.trim()) {
+        return res.status(400).json({ error: "El concepto es requerido" });
+      }
+      
+      if (!dueDateStr) {
+        return res.status(400).json({ error: "La fecha de vencimiento es requerida" });
+      }
+      
+      // Parse due date (ISO format from frontend)
+      const dueDate = new Date(dueDateStr);
+      if (isNaN(dueDate.getTime())) {
+        return res.status(400).json({ error: "Fecha de vencimiento inválida" });
+      }
+      
+      // Get community info and verify ownership
+      const community = await storage.getCommunity(communityId);
+      if (!community) {
+        return res.status(404).json({ error: "Community not found" });
+      }
+      
+      // SECURITY: Verify community belongs to admin's property company
+      if (!adminUser.propertyCompanyId || community.propertyCompanyId !== adminUser.propertyCompanyId) {
+        return res.status(403).json({ error: "Not authorized to access this community" });
+      }
+      
+      // Get the user and verify they belong to this community and the admin's property company
+      const targetUser = await storage.getUser(userId);
+      if (!targetUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      // SECURITY: Verify user belongs to the same community
+      if (targetUser.communityId !== communityId) {
+        return res.status(403).json({ error: "User does not belong to this community" });
+      }
+      
+      // Validate amounts - ensure proper number parsing
+      const baseAmountNum = typeof baseAmount === 'number' ? baseAmount : parseFloat(String(baseAmount));
+      const taxPercent = typeof taxPercentage === 'number' 
+        ? taxPercentage 
+        : (taxPercentage !== undefined && !isNaN(parseFloat(String(taxPercentage)))
+          ? parseFloat(String(taxPercentage)) 
+          : 0);
+      
+      if (isNaN(baseAmountNum) || baseAmountNum <= 0) {
+        return res.status(400).json({ error: "El importe debe ser mayor que 0" });
+      }
+      
+      // Calculate total amount from base amount + tax
+      const totalAmount = baseAmountNum * (1 + taxPercent / 100);
+      const formattedTotalAmount = totalAmount.toFixed(2);
+      
+      // Create the quota assignment (free-form - no quotaTypeId)
+      const assignment = await storage.createQuotaAssignment({
+        communityId,
+        quotaTypeId: undefined, // No quota type for free-form
+        userId,
+        amount: formattedTotalAmount,
+        dueDate,
+        status: "pendiente",
+        notes: notes || null,
+        concept: concept.trim(),
+        taxPercentage: String(taxPercent),
+      });
+      
+      // Sync to Holded if configured
+      const holdedConfigured = isHoldedConfigured();
+      let holdedResult: { holdedInvoiceId?: string; error?: string } = {};
+      
+      if (holdedConfigured) {
+        try {
+          // Ensure user has a Holded contact
+          let holdedContactId = targetUser.holdedContactId;
+          if (!holdedContactId) {
+            holdedContactId = await createHoldedContact(targetUser, community);
+            if (holdedContactId) {
+              await storage.updateUserHoldedId(targetUser.id, holdedContactId);
+            }
+          }
+          
+          if (holdedContactId) {
+            // Create invoice in Holded
+            const holdedInvoiceId = await createHoldedInvoice({
+              contactId: holdedContactId,
+              items: [{
+                name: concept.trim(),
+                desc: notes || `${concept.trim()} - ${community.name}`,
+                units: 1,
+                subtotal: baseAmountNum,
+                tax: taxPercent,
+              }],
+              date: new Date(),
+              dueDate: dueDate,
+              notes: `Comunidad: ${community.name}`,
+            });
+            
+            if (holdedInvoiceId) {
+              // Get invoice details for doc number
+              const invoiceDetails = await getHoldedInvoice(holdedInvoiceId);
+              
+              // Update assignment with Holded data
+              await storage.updateQuotaAssignmentFull(assignment.id, communityId, {
+                holdedInvoiceId,
+                holdedDocNumber: invoiceDetails?.docNumber || null,
+                holdedStatus: invoiceDetails?.status ?? 1,
+                holdedSyncedAt: new Date(),
+              });
+              
+              holdedResult = { holdedInvoiceId };
+              
+              // Send invoice by email
+              if (targetUser.email) {
+                sendInvoiceByEmail(holdedInvoiceId, targetUser.email).catch(err => {
+                  console.error(`[Holded] Failed to send invoice to ${targetUser.email}:`, err);
+                });
+              }
+            } else {
+              holdedResult = { error: "Error al crear la factura" };
+            }
+          } else {
+            holdedResult = { error: "Error al crear el contacto" };
+          }
+        } catch (holdedError) {
+          console.error(`[Holded] Error syncing free-form invoice:`, holdedError);
+          holdedResult = { error: "Error al sincronizar con el sistema de facturación" };
+        }
+      }
+      
+      res.status(201).json({
+        success: true,
+        assignment,
+        holdedSync: holdedConfigured ? {
+          configured: true,
+          ...holdedResult,
+        } : { configured: false },
+      });
+    } catch (error) {
+      console.error("Error generating free-form invoice:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
   
   // Sync a quota assignment to Holded as an invoice
   app.post("/api/quota-assignments/:id/sync-holded", requireRole("admin_fincas"), async (req: Request, res: Response) => {
