@@ -13,7 +13,7 @@ import {
   requireRole
 } from "./auth";
 import { createGHLBusiness, createGHLContact, updateGHLBusiness, archiveGHLBusiness, updateGHLContact, deactivateGHLContact, reactivateGHLContact, isGHLConfigured } from "./ghl";
-import { createHoldedContact, updateHoldedContact, isHoldedConfigured, createHoldedInvoice, getHoldedInvoice, getHoldedInvoicesForContact, getInvoiceStatusLabel, sendInvoiceByEmail, markInvoiceAsPaid } from "./holded";
+import { createHoldedContact, updateHoldedContact, isHoldedConfigured, createHoldedInvoice, getHoldedInvoice, getHoldedInvoicesForContact, getInvoiceStatusLabel, sendInvoiceByEmail, markInvoiceAsPaid, getHoldedInvoicePdf, syncInvoiceStatus } from "./holded";
 import { 
   insertIncidentSchema,
   updateIncidentSchema,
@@ -2144,6 +2144,98 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("Error marking quota as paid:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Download PDF for a quota assignment from Holded
+  // SECURITY: Only the invoice owner or admins can download
+  app.get("/api/quota-assignments/:id/pdf", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const currentUser = (req as any).user;
+      const isAdmin = currentUser.role === "admin_fincas" || currentUser.role === "superadmin";
+      const communityId = getCommunityId(req);
+      
+      const assignment = await storage.getQuotaAssignment(req.params.id, communityId);
+      if (!assignment) {
+        return res.status(404).json({ error: "Quota assignment not found" });
+      }
+      
+      // CRITICAL: Ownership check - residents can only access their own invoices
+      // Admins can access any invoice in their managed communities
+      const isOwner = assignment.userId === currentUser.id;
+      if (!isAdmin && !isOwner) {
+        console.warn(`[Security] User ${currentUser.id} attempted to access invoice ${req.params.id} belonging to user ${assignment.userId}`);
+        return res.status(403).json({ error: "No tienes permiso para descargar esta factura" });
+      }
+      
+      if (!assignment.holdedInvoiceId) {
+        return res.status(400).json({ error: "Esta cuota no tiene factura asociada en Holded" });
+      }
+      
+      if (!isHoldedConfigured()) {
+        return res.status(400).json({ error: "Holded integration not configured" });
+      }
+      
+      const pdfBuffer = await getHoldedInvoicePdf(assignment.holdedInvoiceId);
+      if (!pdfBuffer) {
+        return res.status(500).json({ error: "Error al descargar la factura de Holded" });
+      }
+      
+      const fileName = `factura-${assignment.holdedDocNumber || assignment.id}.pdf`;
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+      res.send(pdfBuffer);
+    } catch (error) {
+      console.error("Error downloading PDF:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Sync status for a quota assignment from Holded
+  app.post("/api/quota-assignments/:id/sync-status", requireRole("admin_fincas"), async (req: Request, res: Response) => {
+    try {
+      const communityId = getCommunityId(req);
+      
+      const assignment = await storage.getQuotaAssignment(req.params.id, communityId);
+      if (!assignment) {
+        return res.status(404).json({ error: "Quota assignment not found" });
+      }
+      
+      if (!assignment.holdedInvoiceId) {
+        return res.status(400).json({ error: "Esta cuota no tiene factura asociada en Holded" });
+      }
+      
+      if (!isHoldedConfigured()) {
+        return res.status(400).json({ error: "Holded integration not configured" });
+      }
+      
+      const syncedData = await syncInvoiceStatus(assignment.holdedInvoiceId);
+      if (!syncedData) {
+        return res.status(500).json({ error: "Error al sincronizar con Holded" });
+      }
+      
+      // Map Holded status to our status
+      let newStatus = assignment.status;
+      if (syncedData.status === 2) {
+        newStatus = "pagada";
+      } else if (syncedData.status === 3) {
+        newStatus = "deudor";
+      } else if (syncedData.status === 1) {
+        newStatus = "pendiente";
+      }
+      
+      // Update the assignment with synced data
+      const updatedAssignment = await storage.updateQuotaAssignmentFull(req.params.id, communityId, {
+        status: newStatus,
+        holdedStatus: syncedData.status,
+        holdedDocNumber: syncedData.docNumber,
+        holdedSyncedAt: new Date(),
+      });
+      
+      res.json(updatedAssignment);
+    } catch (error) {
+      console.error("Error syncing status:", error);
       res.status(500).json({ error: "Internal server error" });
     }
   });

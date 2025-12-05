@@ -12,7 +12,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/hooks/use-auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Save, UserCircle, Mail, Phone, Home, Building2, Receipt, Euro, Calendar, CheckCircle, Clock, AlertTriangle, FileText } from "lucide-react";
+import { Save, UserCircle, Mail, Phone, Home, Building2, Receipt, Euro, Calendar, CheckCircle, Clock, AlertTriangle, FileText, Download, Loader2 } from "lucide-react";
+import { useState } from "react";
 import type { QuotaAssignment, QuotaType } from "@shared/schema";
 
 const profileSchema = z.object({
@@ -73,6 +74,48 @@ export default function Perfil() {
 
   const onSubmit = (data: ProfileFormData) => {
     updateProfileMutation.mutate(data);
+  };
+
+  // State for tracking which PDF is downloading
+  const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
+
+  // Download PDF for a quota assignment
+  const downloadPdf = async (quotaId: string, docNumber?: string | null) => {
+    setDownloadingPdf(quotaId);
+    try {
+      const response = await fetch(`/api/quota-assignments/${quotaId}/pdf`, {
+        credentials: "include",
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Error al descargar");
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `factura-${docNumber || quotaId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast({
+        title: "PDF descargado",
+        description: "La factura se ha descargado correctamente.",
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Error desconocido";
+      toast({
+        title: "Error al descargar PDF",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setDownloadingPdf(null);
+    }
   };
 
   const getRoleBadge = (role: string) => {
@@ -454,15 +497,33 @@ export default function Perfil() {
                               )}
                             </div>
                           </div>
-                          <div className="text-right space-y-1">
-                            <div className="text-lg font-bold flex items-center justify-end gap-1">
-                              <Euro className="w-4 h-4" />
-                              {quota.amount}
+                          <div className="flex items-center gap-3">
+                            <div className="text-right space-y-1">
+                              <div className="text-lg font-bold flex items-center justify-end gap-1">
+                                <Euro className="w-4 h-4" />
+                                {quota.amount}
+                              </div>
+                              <div className="flex flex-col gap-1 items-end">
+                                {getStatusBadge(quota.status)}
+                                {getHoldedStatusBadge(quota.holdedStatus)}
+                              </div>
                             </div>
-                            <div className="flex flex-col gap-1 items-end">
-                              {getStatusBadge(quota.status)}
-                              {getHoldedStatusBadge(quota.holdedStatus)}
-                            </div>
+                            {quota.holdedInvoiceId && (
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                onClick={() => downloadPdf(quota.id, quota.holdedDocNumber)}
+                                disabled={downloadingPdf === quota.id}
+                                data-testid={`button-download-pdf-${quota.id}`}
+                                title="Descargar factura PDF"
+                              >
+                                {downloadingPdf === quota.id ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Download className="w-4 h-4" />
+                                )}
+                              </Button>
+                            )}
                           </div>
                         </div>
                       );
@@ -530,12 +591,28 @@ export default function Perfil() {
                               )}
                             </div>
                           </div>
-                          <div className="flex items-center gap-4">
+                          <div className="flex items-center gap-3">
                             <span className="font-semibold">{quota.amount}€</span>
                             <div className="flex flex-col gap-1 items-end">
                               {getStatusBadge(quota.status)}
                               {getHoldedStatusBadge(quota.holdedStatus)}
                             </div>
+                            {quota.holdedInvoiceId && (
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                onClick={() => downloadPdf(quota.id, quota.holdedDocNumber)}
+                                disabled={downloadingPdf === quota.id}
+                                data-testid={`button-download-pdf-${quota.id}`}
+                                title="Descargar factura PDF"
+                              >
+                                {downloadingPdf === quota.id ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Download className="w-4 h-4" />
+                                )}
+                              </Button>
+                            )}
                           </div>
                         </div>
                       );

@@ -459,6 +459,44 @@ export function isHoldedConfigured(): boolean {
   return getHoldedConfig() !== null;
 }
 
+export async function getHoldedInvoicePdf(invoiceId: string): Promise<Buffer | null> {
+  const config = getHoldedConfig();
+  if (!config) return null;
+
+  try {
+    console.log(`[Holded] Downloading PDF for invoice: ${invoiceId}`);
+
+    const response = await fetch(`${HOLDED_API_BASE}/invoicing/v1/documents/invoice/${invoiceId}/pdf`, {
+      method: "GET",
+      headers: {
+        "key": config.apiKey,
+      },
+    });
+
+    if (!response.ok) {
+      console.error(`[Holded] Failed to download PDF: ${response.status}`);
+      return null;
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    console.log(`[Holded] PDF downloaded successfully: ${invoiceId}`);
+    return Buffer.from(arrayBuffer);
+  } catch (error) {
+    console.error("[Holded] Error downloading PDF:", error);
+    return null;
+  }
+}
+
+export async function syncInvoiceStatus(invoiceId: string): Promise<{ status: number; docNumber: string } | null> {
+  const invoice = await getHoldedInvoice(invoiceId);
+  if (!invoice) return null;
+  
+  return {
+    status: invoice.status,
+    docNumber: invoice.docNumber,
+  };
+}
+
 export function getInvoiceStatusLabel(status: number): string {
   switch (status) {
     case 0: return "Borrador";
