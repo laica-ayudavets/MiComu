@@ -1800,11 +1800,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/invoices/generate-monthly", requireRole("admin_fincas"), async (req: Request, res: Response) => {
     try {
       const communityId = getCommunityId(req);
-      const { month, year, baseAmount, taxPercentage } = req.body;
+      const { month, year, baseAmount, taxPercentage, quotaTypeId } = req.body;
       
       // Validate month and year
       if (!month || !year) {
         return res.status(400).json({ error: "Month and year are required" });
+      }
+      
+      if (!quotaTypeId) {
+        return res.status(400).json({ error: "Quota type ID is required" });
       }
       
       const monthNum = parseInt(month);
@@ -1820,9 +1824,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Community not found" });
       }
       
-      // Use provided base amount or fall back to community monthly fee
-      const baseAmountNum = baseAmount !== undefined ? parseFloat(baseAmount) : (community.monthlyFee ? parseFloat(community.monthlyFee) : 0);
-      const taxPercent = taxPercentage !== undefined ? parseFloat(taxPercentage) : 0;
+      // Get the quota type
+      const quotaType = await storage.getQuotaType(quotaTypeId, communityId);
+      if (!quotaType) {
+        return res.status(404).json({ error: "Quota type not found" });
+      }
+      
+      // Use provided base amount or fall back to quota type amount
+      const baseAmountNum = baseAmount !== undefined ? parseFloat(baseAmount) : parseFloat(quotaType.amount);
+      const taxPercent = taxPercentage !== undefined ? parseFloat(taxPercentage) : parseFloat(quotaType.taxPercentage || "0");
       
       if (baseAmountNum <= 0) {
         return res.status(400).json({ error: "El importe debe ser mayor que 0" });
@@ -1832,31 +1842,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Total = Base * (1 + tax/100)
       const totalAmount = baseAmountNum * (1 + taxPercent / 100);
       const formattedTotalAmount = totalAmount.toFixed(2);
-      
-      // Get or create the monthly quota type
-      let monthlyQuotaType = await storage.getQuotaTypeByName(communityId, "Cuota Ordinaria Mensual");
-      if (!monthlyQuotaType) {
-        monthlyQuotaType = await storage.createQuotaType({
-          communityId,
-          name: "Cuota Ordinaria Mensual",
-          description: "Cuota de comunidad mensual",
-          amount: formattedTotalAmount,
-          frequency: "mensual",
-          isActive: true,
-        });
-      } else if (monthlyQuotaType.amount !== formattedTotalAmount) {
-        // Update the quota type amount if it changed
-        const updated = await storage.updateQuotaType(monthlyQuotaType.id, communityId, { 
-          amount: formattedTotalAmount 
-        });
-        if (updated) {
-          monthlyQuotaType = updated;
-        }
-      }
-      
-      if (!monthlyQuotaType) {
-        return res.status(500).json({ error: "Error al crear el tipo de cuota mensual" });
-      }
       
       // Get all active vecinos in the community
       const vecinos = await storage.getUsersByCommunity(communityId);
@@ -1878,7 +1863,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const hasExisting = existingAssignments.some(a => {
           const aDate = new Date(a.dueDate);
           return aDate.getMonth() + 1 === monthNum && aDate.getFullYear() === yearNum && 
-                 a.quotaTypeId === monthlyQuotaType!.id;
+                 a.quotaTypeId === quotaType.id;
         });
         
         if (hasExisting) {
@@ -1889,12 +1874,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Create the quota assignment with the total amount (including tax)
         const assignment = await storage.createQuotaAssignment({
           communityId,
-          quotaTypeId: monthlyQuotaType.id,
+          quotaTypeId: quotaType.id,
           userId: vecino.id,
           amount: formattedTotalAmount,
           dueDate,
           status: "pendiente",
-          notes: `Cuota mensual ${monthNum.toString().padStart(2, '0')}/${yearNum}`,
+          notes: `${quotaType.name} ${monthNum.toString().padStart(2, '0')}/${yearNum}`,
           periodMonth: monthNum,
           periodYear: yearNum,
         });
@@ -1918,8 +1903,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               const holdedInvoiceId = await createHoldedInvoice({
                 contactId: holdedContactId,
                 items: [{
-                  name: monthlyQuotaType.name || "Cuota Ordinaria Mensual",
-                  desc: `Cuota mensual ${monthNum.toString().padStart(2, '0')}/${yearNum} - ${community.name}`,
+                  name: quotaType.name,
+                  desc: `${quotaType.name} ${monthNum.toString().padStart(2, '0')}/${yearNum} - ${community.name}`,
                   units: 1,
                   subtotal: baseAmountNum, // Base amount before tax (exactly as entered by user)
                   tax: taxPercent, // Tax percentage (e.g., 21 for 21%)

@@ -278,7 +278,8 @@ export const quotaTypes = pgTable("quota_types", {
   communityId: varchar("community_id").notNull().references(() => communities.id, { onDelete: "cascade" }),
   name: text("name").notNull(), // e.g., "Cuota ordinaria", "Cuota extraordinaria", "Gastos agua"
   description: text("description"),
-  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(), // Base amount before tax
+  taxPercentage: decimal("tax_percentage", { precision: 5, scale: 2 }).default("0").notNull(), // VAT/IVA percentage (0, 4, 10, 21)
   frequency: quotaFrequencyEnum("frequency").notNull().default("mensual"),
   isActive: boolean("is_active").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),

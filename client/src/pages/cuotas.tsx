@@ -13,7 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
@@ -53,6 +53,7 @@ export default function Cuotas() {
   const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
   const [baseAmount, setBaseAmount] = useState("");
   const [taxPercentage, setTaxPercentage] = useState("0");
+  const [selectedQuotaType, setSelectedQuotaType] = useState<QuotaType | null>(null);
   const { toast } = useToast();
   const { data: currentCommunity } = useCurrentCommunity();
   const { data: currentUser } = useUser();
@@ -79,6 +80,7 @@ export default function Cuotas() {
       name: "",
       description: "",
       amount: "0",
+      taxPercentage: "0",
       frequency: "mensual",
       isActive: true,
     },
@@ -234,12 +236,13 @@ export default function Cuotas() {
   });
 
   const generateMonthlyMutation = useMutation({
-    mutationFn: async ({ month, year, baseAmount, taxPercent }: { month: string; year: string; baseAmount: string; taxPercent: string }) => {
+    mutationFn: async ({ month, year, baseAmount, taxPercent, quotaTypeId }: { month: string; year: string; baseAmount: string; taxPercent: string; quotaTypeId: string }) => {
       const res = await apiRequest("POST", "/api/invoices/generate-monthly", { 
         month, 
         year,
         baseAmount: parseFloat(baseAmount),
         taxPercentage: parseFloat(taxPercent),
+        quotaTypeId,
       });
       return res.json();
     },
@@ -320,6 +323,7 @@ export default function Cuotas() {
       name: type.name,
       description: type.description || "",
       amount: type.amount,
+      taxPercentage: type.taxPercentage || "0",
       frequency: type.frequency,
       isActive: type.isActive,
     });
@@ -449,93 +453,131 @@ export default function Cuotas() {
         </TabsList>
 
         <TabsContent value="generate" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Zap className="w-5 h-5" />
-                Generar Cuotas Mensuales
-              </CardTitle>
-              <CardDescription>
-                Genera automáticamente las cuotas mensuales para todos los vecinos activos de la comunidad
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {!currentCommunity?.monthlyFee ? (
-                <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-amber-800 dark:bg-amber-950 dark:border-amber-800 dark:text-amber-200">
-                  <div className="flex items-center gap-2">
-                    <AlertCircle className="w-5 h-5" />
-                    <p className="font-medium">Cuota mensual no configurada</p>
-                  </div>
-                  <p className="mt-1 text-sm">
-                    Configura la cuota mensual en la página de Comunidades para poder generar cuotas automáticamente.
-                  </p>
-                </div>
-              ) : (
-                <>
-                  <div className="flex items-center gap-4 text-sm">
-                    <div className="flex items-center gap-2">
-                      <Euro className="w-4 h-4 text-muted-foreground" />
-                      <span className="font-medium">Cuota mensual:</span>
-                      <span className="text-lg font-bold">{currentCommunity.monthlyFee}€</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Users className="w-4 h-4 text-muted-foreground" />
-                      <span className="font-medium">Vecinos activos:</span>
-                      <span>{vecinos.filter(v => users.find(u => u.id === v.id)).length}</span>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-end gap-4 flex-wrap">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Mes</label>
-                      <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                        <SelectTrigger className="w-[140px]" data-testid="select-month">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="1">Enero</SelectItem>
-                          <SelectItem value="2">Febrero</SelectItem>
-                          <SelectItem value="3">Marzo</SelectItem>
-                          <SelectItem value="4">Abril</SelectItem>
-                          <SelectItem value="5">Mayo</SelectItem>
-                          <SelectItem value="6">Junio</SelectItem>
-                          <SelectItem value="7">Julio</SelectItem>
-                          <SelectItem value="8">Agosto</SelectItem>
-                          <SelectItem value="9">Septiembre</SelectItem>
-                          <SelectItem value="10">Octubre</SelectItem>
-                          <SelectItem value="11">Noviembre</SelectItem>
-                          <SelectItem value="12">Diciembre</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Año</label>
-                      <Select value={selectedYear} onValueChange={setSelectedYear}>
-                        <SelectTrigger className="w-[100px]" data-testid="select-year">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="2024">2024</SelectItem>
-                          <SelectItem value="2025">2025</SelectItem>
-                          <SelectItem value="2026">2026</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    {isAdmin && (
-                      <Button 
-                        onClick={() => setGenerateDialogOpen(true)}
-                        disabled={generateMonthlyMutation.isPending}
-                        data-testid="button-generate-monthly"
-                      >
-                        <FileText className="w-4 h-4 mr-2" />
-                        {generateMonthlyMutation.isPending ? "Generando..." : "Generar Cuotas"}
-                      </Button>
-                    )}
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold">Generación de Cuotas</h2>
+              <p className="text-sm text-muted-foreground">
+                Selecciona el periodo y genera cuotas para los vecinos activos
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Users className="w-4 h-4 text-muted-foreground" />
+              <span className="text-sm">
+                <span className="font-medium">{vecinos.filter(v => users.find(u => u.id === v.id)).length}</span> vecinos activos
+              </span>
+            </div>
+          </div>
+          
+          <div className="flex items-end gap-4 flex-wrap p-4 rounded-lg border bg-muted/30">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Mes</label>
+              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                <SelectTrigger className="w-[140px]" data-testid="select-month">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">Enero</SelectItem>
+                  <SelectItem value="2">Febrero</SelectItem>
+                  <SelectItem value="3">Marzo</SelectItem>
+                  <SelectItem value="4">Abril</SelectItem>
+                  <SelectItem value="5">Mayo</SelectItem>
+                  <SelectItem value="6">Junio</SelectItem>
+                  <SelectItem value="7">Julio</SelectItem>
+                  <SelectItem value="8">Agosto</SelectItem>
+                  <SelectItem value="9">Septiembre</SelectItem>
+                  <SelectItem value="10">Octubre</SelectItem>
+                  <SelectItem value="11">Noviembre</SelectItem>
+                  <SelectItem value="12">Diciembre</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Año</label>
+              <Select value={selectedYear} onValueChange={setSelectedYear}>
+                <SelectTrigger className="w-[100px]" data-testid="select-year">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="2024">2024</SelectItem>
+                  <SelectItem value="2025">2025</SelectItem>
+                  <SelectItem value="2026">2026</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          
+          {loadingTypes ? (
+            <p className="text-muted-foreground">Cargando tipos de cuota...</p>
+          ) : quotaTypes.filter(t => t.isActive).length === 0 ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-amber-800 dark:bg-amber-950 dark:border-amber-800 dark:text-amber-200">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-5 h-5" />
+                <p className="font-medium">No hay tipos de cuota activos</p>
+              </div>
+              <p className="mt-1 text-sm">
+                Crea al menos un tipo de cuota en la pestaña "Tipos de Cuotas" para poder generar cuotas.
+              </p>
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {quotaTypes.filter(t => t.isActive).map((quotaType) => {
+                const baseAmount = parseFloat(quotaType.amount);
+                const taxPercent = parseFloat(quotaType.taxPercentage || "0");
+                const totalAmount = baseAmount * (1 + taxPercent / 100);
+                
+                return (
+                  <Card key={quotaType.id} className="hover-elevate">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="flex items-center gap-2 text-base">
+                        <Zap className="w-4 h-4" />
+                        {quotaType.name}
+                      </CardTitle>
+                      {quotaType.description && (
+                        <CardDescription className="text-xs">
+                          {quotaType.description}
+                        </CardDescription>
+                      )}
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="space-y-1 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Base imponible:</span>
+                          <span className="font-medium">{baseAmount.toFixed(2)}€</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">IVA ({taxPercent}%):</span>
+                          <span className="font-medium">{(baseAmount * taxPercent / 100).toFixed(2)}€</span>
+                        </div>
+                        <div className="flex justify-between border-t pt-1">
+                          <span className="font-medium">Total:</span>
+                          <span className="font-bold text-primary">{totalAmount.toFixed(2)}€</span>
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center text-xs text-muted-foreground">
+                        <span>Frecuencia: {quotaType.frequency}</span>
+                      </div>
+                      {isAdmin && (
+                        <Button 
+                          className="w-full"
+                          onClick={() => {
+                            setBaseAmount(quotaType.amount);
+                            setTaxPercentage(quotaType.taxPercentage || "0");
+                            setSelectedQuotaType(quotaType);
+                            setGenerateDialogOpen(true);
+                          }}
+                          disabled={generateMonthlyMutation.isPending}
+                          data-testid={`button-generate-${quotaType.id}`}
+                        >
+                          <FileText className="w-4 h-4 mr-2" />
+                          Generar para {["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"][parseInt(selectedMonth)]}
+                        </Button>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
 
           <Card>
             <CardHeader>
@@ -784,10 +826,35 @@ export default function Cuotas() {
                 name="amount"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Importe (€) *</FormLabel>
+                    <FormLabel>Base Imponible (€) *</FormLabel>
                     <FormControl>
                       <Input {...field} type="number" step="0.01" placeholder="100.00" data-testid="input-quota-type-amount" />
                     </FormControl>
+                    <FormDescription>Importe antes de impuestos</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={typeForm.control}
+                name="taxPercentage"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>IVA (%)</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || "0"}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-quota-type-tax">
+                          <SelectValue placeholder="Selecciona el IVA" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="0">0% (Sin IVA)</SelectItem>
+                        <SelectItem value="4">4% (Superreducido)</SelectItem>
+                        <SelectItem value="10">10% (Reducido)</SelectItem>
+                        <SelectItem value="21">21% (General)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>Las cuotas de comunidad normalmente no llevan IVA</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -993,15 +1060,15 @@ export default function Cuotas() {
 
       <Dialog open={generateDialogOpen} onOpenChange={(open) => {
         setGenerateDialogOpen(open);
-        if (open && currentCommunity?.monthlyFee) {
-          setBaseAmount(currentCommunity.monthlyFee);
+        if (!open) {
+          setSelectedQuotaType(null);
         }
       }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Generar Cuotas Mensuales</DialogTitle>
+            <DialogTitle>Generar Cuotas: {selectedQuotaType?.name}</DialogTitle>
             <DialogDescription>
-              Configura la base imponible y el IVA para las cuotas de este mes.
+              Confirma los datos y genera las cuotas para todos los vecinos activos.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -1009,6 +1076,10 @@ export default function Cuotas() {
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Comunidad:</span>
                 <span className="font-medium">{currentCommunity?.name}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Tipo de cuota:</span>
+                <span className="font-medium">{selectedQuotaType?.name}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Mes/Año:</span>
@@ -1086,11 +1157,12 @@ export default function Cuotas() {
               Cancelar
             </Button>
             <Button 
-              onClick={() => generateMonthlyMutation.mutate({ 
+              onClick={() => selectedQuotaType && generateMonthlyMutation.mutate({ 
                 month: selectedMonth, 
                 year: selectedYear,
                 baseAmount: baseAmount,
                 taxPercent: taxPercentage,
+                quotaTypeId: selectedQuotaType.id,
               })}
               disabled={generateMonthlyMutation.isPending || !baseAmount || parseFloat(baseAmount) <= 0}
               data-testid="button-confirm-generate"
