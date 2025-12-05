@@ -1831,10 +1831,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Use provided base amount or fall back to quota type amount
-      const baseAmountNum = baseAmount !== undefined ? parseFloat(baseAmount) : parseFloat(quotaType.amount);
-      const taxPercent = taxPercentage !== undefined ? parseFloat(taxPercentage) : parseFloat(quotaType.taxPercentage || "0");
+      const baseAmountNum = baseAmount !== undefined && !isNaN(parseFloat(baseAmount)) 
+        ? parseFloat(baseAmount) 
+        : parseFloat(quotaType.amount);
+      const taxPercent = taxPercentage !== undefined && !isNaN(parseFloat(taxPercentage))
+        ? parseFloat(taxPercentage) 
+        : parseFloat(quotaType.taxPercentage || "0");
       
-      if (baseAmountNum <= 0) {
+      if (isNaN(baseAmountNum) || baseAmountNum <= 0) {
         return res.status(400).json({ error: "El importe debe ser mayor que 0" });
       }
       
@@ -1964,6 +1968,164 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("Error generating monthly invoices:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Generate individual invoice for a specific vecino
+  app.post("/api/invoices/generate-individual", requireRole("admin_fincas"), async (req: Request, res: Response) => {
+    try {
+      const communityId = getCommunityId(req);
+      const { userId, quotaTypeId, month, year, baseAmount, taxPercentage, notes } = req.body;
+      
+      // Validate required fields
+      if (!userId || !quotaTypeId || !month || !year) {
+        return res.status(400).json({ error: "User ID, quota type ID, month and year are required" });
+      }
+      
+      const monthNum = parseInt(month);
+      const yearNum = parseInt(year);
+      
+      if (monthNum < 1 || monthNum > 12) {
+        return res.status(400).json({ error: "Invalid month" });
+      }
+      
+      // Get community info
+      const community = await storage.getCommunity(communityId);
+      if (!community) {
+        return res.status(404).json({ error: "Community not found" });
+      }
+      
+      // Get the quota type
+      const quotaType = await storage.getQuotaType(quotaTypeId, communityId);
+      if (!quotaType) {
+        return res.status(404).json({ error: "Quota type not found" });
+      }
+      
+      // Get the user
+      const user = await storage.getUser(userId);
+      if (!user || user.communityId !== communityId) {
+        return res.status(404).json({ error: "User not found in this community" });
+      }
+      
+      // Use provided base amount or fall back to quota type amount
+      const baseAmountNum = baseAmount !== undefined && !isNaN(parseFloat(baseAmount)) 
+        ? parseFloat(baseAmount) 
+        : parseFloat(quotaType.amount);
+      const taxPercent = taxPercentage !== undefined && !isNaN(parseFloat(taxPercentage))
+        ? parseFloat(taxPercentage) 
+        : parseFloat(quotaType.taxPercentage || "0");
+      
+      if (isNaN(baseAmountNum) || baseAmountNum <= 0) {
+        return res.status(400).json({ error: "El importe debe ser mayor que 0" });
+      }
+      
+      // Calculate total amount from base amount + tax
+      const totalAmount = baseAmountNum * (1 + taxPercent / 100);
+      const formattedTotalAmount = totalAmount.toFixed(2);
+      
+      // Due date is last day of the month
+      const dueDate = new Date(yearNum, monthNum, 0);
+      
+      // Check if assignment already exists for this month
+      const existingAssignments = await storage.getQuotaAssignmentsByUser(userId, communityId);
+      const hasExisting = existingAssignments.some(a => {
+        const aDate = new Date(a.dueDate);
+        return aDate.getMonth() + 1 === monthNum && aDate.getFullYear() === yearNum && 
+               a.quotaTypeId === quotaType.id;
+      });
+      
+      if (hasExisting) {
+        return res.status(400).json({ error: "Ya existe una cuota de este tipo para este mes y usuario" });
+      }
+      
+      // Create the quota assignment
+      const noteText = notes || `${quotaType.name} ${monthNum.toString().padStart(2, '0')}/${yearNum}`;
+      const assignment = await storage.createQuotaAssignment({
+        communityId,
+        quotaTypeId: quotaType.id,
+        userId,
+        amount: formattedTotalAmount,
+        dueDate,
+        status: "pendiente",
+        notes: noteText,
+        periodMonth: monthNum,
+        periodYear: yearNum,
+      });
+      
+      // Sync to Holded if configured
+      const holdedConfigured = isHoldedConfigured();
+      let holdedResult: { holdedInvoiceId?: string; error?: string } = {};
+      
+      if (holdedConfigured) {
+        try {
+          // Ensure user has a Holded contact
+          let holdedContactId = user.holdedContactId;
+          if (!holdedContactId) {
+            holdedContactId = await createHoldedContact(user, community);
+            if (holdedContactId) {
+              await storage.updateUserHoldedId(user.id, holdedContactId);
+            }
+          }
+          
+          if (holdedContactId) {
+            // Create invoice in Holded
+            const holdedInvoiceId = await createHoldedInvoice({
+              contactId: holdedContactId,
+              items: [{
+                name: quotaType.name,
+                desc: `${noteText} - ${community.name}`,
+                units: 1,
+                subtotal: baseAmountNum,
+                tax: taxPercent,
+              }],
+              date: new Date(),
+              dueDate: dueDate,
+              notes: `Comunidad: ${community.name}`,
+            });
+            
+            if (holdedInvoiceId) {
+              // Get invoice details for doc number
+              const invoiceDetails = await getHoldedInvoice(holdedInvoiceId);
+              
+              // Update assignment with Holded data
+              await storage.updateQuotaAssignmentFull(assignment.id, communityId, {
+                holdedInvoiceId,
+                holdedDocNumber: invoiceDetails?.docNumber || null,
+                holdedStatus: invoiceDetails?.status ?? 1,
+                holdedSyncedAt: new Date(),
+              });
+              
+              holdedResult = { holdedInvoiceId };
+              
+              // Send invoice by email
+              if (user.email) {
+                sendInvoiceByEmail(holdedInvoiceId, user.email).catch(err => {
+                  console.error(`[Holded] Failed to send invoice to ${user.email}:`, err);
+                });
+              }
+            } else {
+              holdedResult = { error: "Failed to create Holded invoice" };
+            }
+          } else {
+            holdedResult = { error: "Failed to create Holded contact" };
+          }
+        } catch (holdedError) {
+          console.error(`[Holded] Error syncing individual invoice:`, holdedError);
+          holdedResult = { error: String(holdedError) };
+        }
+      }
+      
+      res.status(201).json({
+        success: true,
+        assignment,
+        holdedSync: holdedConfigured ? {
+          configured: true,
+          ...holdedResult,
+        } : { configured: false },
+      });
+    } catch (error) {
+      console.error("Error generating individual invoice:", error);
       res.status(500).json({ error: "Internal server error" });
     }
   });

@@ -54,6 +54,12 @@ export default function Cuotas() {
   const [baseAmount, setBaseAmount] = useState("");
   const [taxPercentage, setTaxPercentage] = useState("0");
   const [selectedQuotaType, setSelectedQuotaType] = useState<QuotaType | null>(null);
+  const [individualDialogOpen, setIndividualDialogOpen] = useState(false);
+  const [selectedVecinoId, setSelectedVecinoId] = useState<string>("");
+  const [individualQuotaTypeId, setIndividualQuotaTypeId] = useState<string>("");
+  const [individualBaseAmount, setIndividualBaseAmount] = useState("");
+  const [individualTaxPercentage, setIndividualTaxPercentage] = useState("0");
+  const [individualNotes, setIndividualNotes] = useState("");
   const { toast } = useToast();
   const { data: currentCommunity } = useCurrentCommunity();
   const { data: currentUser } = useUser();
@@ -264,6 +270,57 @@ export default function Cuotas() {
     },
   });
 
+  const generateIndividualMutation = useMutation({
+    mutationFn: async ({ 
+      userId, 
+      quotaTypeId, 
+      baseAmount, 
+      taxPercent,
+      month,
+      year,
+      notes,
+    }: { 
+      userId: string; 
+      quotaTypeId: string; 
+      baseAmount: string; 
+      taxPercent: string;
+      month: string;
+      year: string;
+      notes?: string;
+    }) => {
+      const res = await apiRequest("POST", "/api/invoices/generate-individual", { 
+        userId,
+        quotaTypeId,
+        month, 
+        year,
+        baseAmount: parseFloat(baseAmount),
+        taxPercentage: parseFloat(taxPercent),
+        notes,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/quota-assignments"] });
+      setIndividualDialogOpen(false);
+      setSelectedVecinoId("");
+      setIndividualQuotaTypeId("");
+      setIndividualBaseAmount("");
+      setIndividualTaxPercentage("0");
+      setIndividualNotes("");
+      toast({
+        title: "Cuota generada",
+        description: "Se ha creado la cuota individual correctamente",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const markPaidMutation = useMutation({
     mutationFn: async ({ id, paidDate }: { id: string; paidDate?: Date }) => {
       const res = await apiRequest("POST", `/api/quota-assignments/${id}/mark-paid`, { paidDate });
@@ -453,18 +510,30 @@ export default function Cuotas() {
         </TabsList>
 
         <TabsContent value="generate" className="space-y-6">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
               <h2 className="text-lg font-semibold">Generación de Cuotas</h2>
               <p className="text-sm text-muted-foreground">
                 Selecciona el periodo y genera cuotas para los vecinos activos
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <Users className="w-4 h-4 text-muted-foreground" />
-              <span className="text-sm">
-                <span className="font-medium">{vecinos.filter(v => users.find(u => u.id === v.id)).length}</span> vecinos activos
-              </span>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm">
+                  <span className="font-medium">{vecinos.filter(v => users.find(u => u.id === v.id)).length}</span> vecinos activos
+                </span>
+              </div>
+              {isAdmin && (
+                <Button 
+                  variant="outline"
+                  onClick={() => setIndividualDialogOpen(true)}
+                  data-testid="button-generate-individual"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Cuota Individual
+                </Button>
+              )}
             </div>
           </div>
           
@@ -1168,6 +1237,196 @@ export default function Cuotas() {
               data-testid="button-confirm-generate"
             >
               {generateMonthlyMutation.isPending ? "Generando..." : "Confirmar y Generar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={individualDialogOpen} onOpenChange={(open) => {
+        setIndividualDialogOpen(open);
+        if (!open) {
+          setSelectedVecinoId("");
+          setIndividualQuotaTypeId("");
+          setIndividualBaseAmount("");
+          setIndividualTaxPercentage("0");
+          setIndividualNotes("");
+        }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Generar Cuota Individual</DialogTitle>
+            <DialogDescription>
+              Crea una cuota para un vecino específico
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Vecino *</label>
+              <Select value={selectedVecinoId} onValueChange={setSelectedVecinoId}>
+                <SelectTrigger data-testid="select-individual-vecino">
+                  <SelectValue placeholder="Selecciona un vecino" />
+                </SelectTrigger>
+                <SelectContent>
+                  {vecinos.map((vecino) => (
+                    <SelectItem key={vecino.id} value={vecino.id}>
+                      {vecino.fullName || vecino.email} {vecino.unitNumber && `- Unidad ${vecino.unitNumber}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Tipo de Cuota *</label>
+              <Select 
+                value={individualQuotaTypeId} 
+                onValueChange={(value) => {
+                  setIndividualQuotaTypeId(value);
+                  const qt = quotaTypes.find(t => t.id === value);
+                  if (qt) {
+                    setIndividualBaseAmount(qt.amount);
+                    setIndividualTaxPercentage(qt.taxPercentage || "0");
+                  }
+                }}
+              >
+                <SelectTrigger data-testid="select-individual-quota-type">
+                  <SelectValue placeholder="Selecciona un tipo de cuota" />
+                </SelectTrigger>
+                <SelectContent>
+                  {quotaTypes.filter(t => t.isActive).map((type) => (
+                    <SelectItem key={type.id} value={type.id}>
+                      {type.name} - {type.amount}€
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Mes</label>
+                <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                  <SelectTrigger data-testid="select-individual-month">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">Enero</SelectItem>
+                    <SelectItem value="2">Febrero</SelectItem>
+                    <SelectItem value="3">Marzo</SelectItem>
+                    <SelectItem value="4">Abril</SelectItem>
+                    <SelectItem value="5">Mayo</SelectItem>
+                    <SelectItem value="6">Junio</SelectItem>
+                    <SelectItem value="7">Julio</SelectItem>
+                    <SelectItem value="8">Agosto</SelectItem>
+                    <SelectItem value="9">Septiembre</SelectItem>
+                    <SelectItem value="10">Octubre</SelectItem>
+                    <SelectItem value="11">Noviembre</SelectItem>
+                    <SelectItem value="12">Diciembre</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Año</label>
+                <Select value={selectedYear} onValueChange={setSelectedYear}>
+                  <SelectTrigger data-testid="select-individual-year">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="2024">2024</SelectItem>
+                    <SelectItem value="2025">2025</SelectItem>
+                    <SelectItem value="2026">2026</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Base Imponible (sin IVA)</label>
+              <div className="relative">
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={individualBaseAmount}
+                  onChange={(e) => setIndividualBaseAmount(e.target.value)}
+                  placeholder="0.00"
+                  className="pr-8"
+                  data-testid="input-individual-base-amount"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">€</span>
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Porcentaje de IVA</label>
+              <Select value={individualTaxPercentage} onValueChange={setIndividualTaxPercentage}>
+                <SelectTrigger data-testid="select-individual-tax-percentage">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">0% (Sin IVA)</SelectItem>
+                  <SelectItem value="4">4% (IVA Superreducido)</SelectItem>
+                  <SelectItem value="10">10% (IVA Reducido)</SelectItem>
+                  <SelectItem value="21">21% (IVA General)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Notas (opcional)</label>
+              <Textarea
+                value={individualNotes}
+                onChange={(e) => setIndividualNotes(e.target.value)}
+                placeholder="Notas adicionales..."
+                data-testid="input-individual-notes"
+              />
+            </div>
+            
+            {individualBaseAmount && parseFloat(individualBaseAmount) > 0 && (
+              <div className="rounded-md bg-muted p-3 space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Base imponible:</span>
+                  <span className="font-medium">
+                    {parseFloat(individualBaseAmount).toFixed(2)}€
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">IVA ({individualTaxPercentage}%):</span>
+                  <span className="font-medium">
+                    {(parseFloat(individualBaseAmount) * parseFloat(individualTaxPercentage) / 100).toFixed(2)}€
+                  </span>
+                </div>
+                <div className="flex justify-between border-t pt-1">
+                  <span className="font-medium">Total a pagar:</span>
+                  <span className="font-bold">{(parseFloat(individualBaseAmount) * (1 + parseFloat(individualTaxPercentage) / 100)).toFixed(2)}€</span>
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIndividualDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={() => generateIndividualMutation.mutate({ 
+                userId: selectedVecinoId,
+                quotaTypeId: individualQuotaTypeId,
+                month: selectedMonth, 
+                year: selectedYear,
+                baseAmount: individualBaseAmount,
+                taxPercent: individualTaxPercentage,
+                notes: individualNotes || undefined,
+              })}
+              disabled={
+                generateIndividualMutation.isPending || 
+                !selectedVecinoId || 
+                !individualQuotaTypeId ||
+                !individualBaseAmount || 
+                parseFloat(individualBaseAmount) <= 0
+              }
+              data-testid="button-confirm-individual"
+            >
+              {generateIndividualMutation.isPending ? "Generando..." : "Generar Cuota"}
             </Button>
           </DialogFooter>
         </DialogContent>
