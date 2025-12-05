@@ -23,6 +23,7 @@ import {
   type InsertQuotaType,
   type QuotaAssignment,
   type InsertQuotaAssignment,
+  type FullUpdateQuotaAssignment,
   type Meeting,
   type InsertMeeting,
   type MeetingAgendaItem,
@@ -135,6 +136,7 @@ export interface IStorage {
   getQuotaAssignmentsByQuotaType(quotaTypeId: string, communityId: string): Promise<QuotaAssignment[]>;
   createQuotaAssignment(assignment: InsertQuotaAssignment): Promise<QuotaAssignment>;
   updateQuotaAssignment(id: string, communityId: string, updates: Partial<InsertQuotaAssignment>): Promise<QuotaAssignment | undefined>;
+  updateQuotaAssignmentFull(id: string, communityId: string, updates: FullUpdateQuotaAssignment): Promise<QuotaAssignment | undefined>;
   deleteQuotaAssignment(id: string, communityId: string): Promise<boolean>;
   
   // Meeting management (community-scoped)
@@ -641,6 +643,14 @@ export class DbStorage implements IStorage {
   }
 
   async updateQuotaAssignment(id: string, communityId: string, updates: Partial<InsertQuotaAssignment>): Promise<QuotaAssignment | undefined> {
+    const result = await db.update(quotaAssignments)
+      .set(updates)
+      .where(and(eq(quotaAssignments.id, id), eq(quotaAssignments.communityId, communityId)))
+      .returning();
+    return result[0];
+  }
+
+  async updateQuotaAssignmentFull(id: string, communityId: string, updates: FullUpdateQuotaAssignment): Promise<QuotaAssignment | undefined> {
     const result = await db.update(quotaAssignments)
       .set(updates)
       .where(and(eq(quotaAssignments.id, id), eq(quotaAssignments.communityId, communityId)))

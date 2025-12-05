@@ -306,20 +306,48 @@ export const quotaAssignments = pgTable("quota_assignments", {
   dueDate: timestamp("due_date").notNull(),
   paidDate: timestamp("paid_date"),
   notes: text("notes"), // Optional notes (e.g., payment method, discount reason)
+  // Holded integration fields
+  holdedInvoiceId: text("holded_invoice_id"), // Holded document ID
+  holdedDocNumber: text("holded_doc_number"), // Invoice number in Holded (e.g., "F2024-001")
+  holdedStatus: integer("holded_status"), // 0: draft, 1: not paid, 2: paid, 3: late
+  holdedSyncedAt: timestamp("holded_synced_at"), // Last sync timestamp
+  periodMonth: integer("period_month"), // Month this quota is for (1-12)
+  periodYear: integer("period_year"), // Year this quota is for
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const insertQuotaAssignmentSchema = createInsertSchema(quotaAssignments).omit({
   id: true,
   createdAt: true,
+  holdedInvoiceId: true, // Set programmatically during Holded sync
+  holdedDocNumber: true,
+  holdedStatus: true,
+  holdedSyncedAt: true,
 });
 export const updateQuotaAssignmentSchema = insertQuotaAssignmentSchema.partial().omit({
   communityId: true,
   quotaTypeId: true,
   userId: true,
 });
+
+// Full update schema including Holded fields (for internal use)
+export const fullUpdateQuotaAssignmentSchema = z.object({
+  status: z.enum(["pendiente", "pagada", "vencida"]).optional(),
+  amount: z.string().optional(),
+  dueDate: z.coerce.date().optional(),
+  paidDate: z.coerce.date().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  holdedInvoiceId: z.string().optional().nullable(),
+  holdedDocNumber: z.string().optional().nullable(),
+  holdedStatus: z.number().optional().nullable(),
+  holdedSyncedAt: z.coerce.date().optional().nullable(),
+  periodMonth: z.number().optional().nullable(),
+  periodYear: z.number().optional().nullable(),
+});
+
 export type InsertQuotaAssignment = z.infer<typeof insertQuotaAssignmentSchema>;
 export type UpdateQuotaAssignment = z.infer<typeof updateQuotaAssignmentSchema>;
+export type FullUpdateQuotaAssignment = z.infer<typeof fullUpdateQuotaAssignmentSchema>;
 export type QuotaAssignment = typeof quotaAssignments.$inferSelect;
 
 // Meetings (Juntas)
