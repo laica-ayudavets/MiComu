@@ -51,7 +51,7 @@ export default function Cuotas() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedMonth, setSelectedMonth] = useState(String(new Date().getMonth() + 1));
   const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
-  const [invoiceAmount, setInvoiceAmount] = useState("");
+  const [baseAmount, setBaseAmount] = useState("");
   const [taxPercentage, setTaxPercentage] = useState("0");
   const { toast } = useToast();
   const { data: currentCommunity } = useCurrentCommunity();
@@ -234,11 +234,11 @@ export default function Cuotas() {
   });
 
   const generateMonthlyMutation = useMutation({
-    mutationFn: async ({ month, year, amount, taxPercent }: { month: string; year: string; amount: string; taxPercent: string }) => {
+    mutationFn: async ({ month, year, baseAmount, taxPercent }: { month: string; year: string; baseAmount: string; taxPercent: string }) => {
       const res = await apiRequest("POST", "/api/invoices/generate-monthly", { 
         month, 
         year,
-        amount: parseFloat(amount),
+        baseAmount: parseFloat(baseAmount),
         taxPercentage: parseFloat(taxPercent),
       });
       return res.json();
@@ -994,14 +994,14 @@ export default function Cuotas() {
       <Dialog open={generateDialogOpen} onOpenChange={(open) => {
         setGenerateDialogOpen(open);
         if (open && currentCommunity?.monthlyFee) {
-          setInvoiceAmount(currentCommunity.monthlyFee);
+          setBaseAmount(currentCommunity.monthlyFee);
         }
       }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Generar Cuotas Mensuales</DialogTitle>
             <DialogDescription>
-              Configura el importe y el IVA para las cuotas de este mes.
+              Configura la base imponible y el IVA para las cuotas de este mes.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -1020,22 +1020,22 @@ export default function Cuotas() {
             
             <div className="space-y-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Importe Total (con IVA)</label>
+                <label className="text-sm font-medium">Base Imponible (sin IVA)</label>
                 <div className="relative">
                   <Input
                     type="number"
                     step="0.01"
                     min="0"
-                    value={invoiceAmount}
-                    onChange={(e) => setInvoiceAmount(e.target.value)}
+                    value={baseAmount}
+                    onChange={(e) => setBaseAmount(e.target.value)}
                     placeholder="0.00"
                     className="pr-8"
-                    data-testid="input-invoice-amount"
+                    data-testid="input-base-amount"
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">€</span>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Este es el importe final que pagará cada vecino.
+                  Introduce el importe antes de impuestos. El total se calculará automáticamente.
                 </p>
               </div>
               
@@ -1059,23 +1059,23 @@ export default function Cuotas() {
                 </p>
               </div>
               
-              {invoiceAmount && parseFloat(invoiceAmount) > 0 && (
+              {baseAmount && parseFloat(baseAmount) > 0 && (
                 <div className="rounded-md bg-muted p-3 space-y-1 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Base imponible:</span>
                     <span className="font-medium">
-                      {(parseFloat(invoiceAmount) / (1 + parseFloat(taxPercentage) / 100)).toFixed(2)}€
+                      {parseFloat(baseAmount).toFixed(2)}€
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">IVA ({taxPercentage}%):</span>
                     <span className="font-medium">
-                      {(parseFloat(invoiceAmount) - parseFloat(invoiceAmount) / (1 + parseFloat(taxPercentage) / 100)).toFixed(2)}€
+                      {(parseFloat(baseAmount) * parseFloat(taxPercentage) / 100).toFixed(2)}€
                     </span>
                   </div>
                   <div className="flex justify-between border-t pt-1">
-                    <span className="font-medium">Total:</span>
-                    <span className="font-bold">{parseFloat(invoiceAmount).toFixed(2)}€</span>
+                    <span className="font-medium">Total a pagar:</span>
+                    <span className="font-bold">{(parseFloat(baseAmount) * (1 + parseFloat(taxPercentage) / 100)).toFixed(2)}€</span>
                   </div>
                 </div>
               )}
@@ -1089,10 +1089,10 @@ export default function Cuotas() {
               onClick={() => generateMonthlyMutation.mutate({ 
                 month: selectedMonth, 
                 year: selectedYear,
-                amount: invoiceAmount,
+                baseAmount: baseAmount,
                 taxPercent: taxPercentage,
               })}
-              disabled={generateMonthlyMutation.isPending || !invoiceAmount || parseFloat(invoiceAmount) <= 0}
+              disabled={generateMonthlyMutation.isPending || !baseAmount || parseFloat(baseAmount) <= 0}
               data-testid="button-confirm-generate"
             >
               {generateMonthlyMutation.isPending ? "Generando..." : "Confirmar y Generar"}

@@ -1800,7 +1800,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/invoices/generate-monthly", requireRole("admin_fincas"), async (req: Request, res: Response) => {
     try {
       const communityId = getCommunityId(req);
-      const { month, year, amount, taxPercentage } = req.body;
+      const { month, year, baseAmount, taxPercentage } = req.body;
       
       // Validate month and year
       if (!month || !year) {
@@ -1820,18 +1820,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Community not found" });
       }
       
-      // Use provided amount or fall back to community monthly fee
-      const totalAmount = amount !== undefined ? parseFloat(amount) : (community.monthlyFee ? parseFloat(community.monthlyFee) : 0);
+      // Use provided base amount or fall back to community monthly fee
+      const baseAmountNum = baseAmount !== undefined ? parseFloat(baseAmount) : (community.monthlyFee ? parseFloat(community.monthlyFee) : 0);
       const taxPercent = taxPercentage !== undefined ? parseFloat(taxPercentage) : 0;
       
-      if (totalAmount <= 0) {
+      if (baseAmountNum <= 0) {
         return res.status(400).json({ error: "El importe debe ser mayor que 0" });
       }
       
-      // Calculate base amount (subtotal) from total amount with tax
-      // Total = Base * (1 + tax/100) => Base = Total / (1 + tax/100)
-      const baseAmount = totalAmount / (1 + taxPercent / 100);
-      const formattedAmount = totalAmount.toFixed(2);
+      // Calculate total amount from base amount + tax
+      // Total = Base * (1 + tax/100)
+      const totalAmount = baseAmountNum * (1 + taxPercent / 100);
+      const formattedTotalAmount = totalAmount.toFixed(2);
       
       // Get or create the monthly quota type
       let monthlyQuotaType = await storage.getQuotaTypeByName(communityId, "Cuota Ordinaria Mensual");
@@ -1840,14 +1840,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           communityId,
           name: "Cuota Ordinaria Mensual",
           description: "Cuota de comunidad mensual",
-          amount: formattedAmount,
+          amount: formattedTotalAmount,
           frequency: "mensual",
           isActive: true,
         });
-      } else if (monthlyQuotaType.amount !== formattedAmount) {
+      } else if (monthlyQuotaType.amount !== formattedTotalAmount) {
         // Update the quota type amount if it changed
         const updated = await storage.updateQuotaType(monthlyQuotaType.id, communityId, { 
-          amount: formattedAmount 
+          amount: formattedTotalAmount 
         });
         if (updated) {
           monthlyQuotaType = updated;
@@ -1891,7 +1891,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           communityId,
           quotaTypeId: monthlyQuotaType.id,
           userId: vecino.id,
-          amount: formattedAmount,
+          amount: formattedTotalAmount,
           dueDate,
           status: "pendiente",
           notes: `Cuota mensual ${monthNum.toString().padStart(2, '0')}/${yearNum}`,
@@ -1913,7 +1913,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
             
             if (holdedContactId) {
-              // Create invoice in Holded with proper base amount and tax
+              // Create invoice in Holded with base amount directly (no rounding issues)
               // Holded expects: subtotal (base) + tax percentage = total
               const holdedInvoiceId = await createHoldedInvoice({
                 contactId: holdedContactId,
@@ -1921,7 +1921,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   name: monthlyQuotaType.name || "Cuota Ordinaria Mensual",
                   desc: `Cuota mensual ${monthNum.toString().padStart(2, '0')}/${yearNum} - ${community.name}`,
                   units: 1,
-                  subtotal: parseFloat(baseAmount.toFixed(2)), // Base amount before tax
+                  subtotal: baseAmountNum, // Base amount before tax (exactly as entered by user)
                   tax: taxPercent, // Tax percentage (e.g., 21 for 21%)
                 }],
                 date: new Date(),
