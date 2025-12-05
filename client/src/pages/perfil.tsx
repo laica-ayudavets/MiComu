@@ -112,6 +112,41 @@ export default function Perfil() {
     }
   };
 
+  // Get Holded status badge
+  const getHoldedStatusBadge = (holdedStatus: number | null) => {
+    if (holdedStatus === null || holdedStatus === undefined) {
+      return null;
+    }
+    switch (holdedStatus) {
+      case 0:
+        return (
+          <Badge variant="outline" className="text-xs">
+            Borrador
+          </Badge>
+        );
+      case 1:
+        return (
+          <Badge variant="secondary" className="text-xs">
+            Pendiente
+          </Badge>
+        );
+      case 2:
+        return (
+          <Badge variant="default" className="text-xs bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
+            Pagada
+          </Badge>
+        );
+      case 3:
+        return (
+          <Badge variant="destructive" className="text-xs">
+            Vencida
+          </Badge>
+        );
+      default:
+        return null;
+    }
+  };
+
   // Calculate totals for summary
   const pendingQuotas = quotaAssignments.filter(q => q.status === "pendiente");
   const paidQuotas = quotaAssignments.filter(q => q.status === "pagada");
@@ -396,19 +431,38 @@ export default function Perfil() {
                           data-testid={`quota-pending-${quota.id}`}
                         >
                           <div className="space-y-1">
-                            <p className="font-medium">{quotaType?.name || "Cuota"}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium">{quotaType?.name || "Cuota"}</p>
+                              {quota.holdedDocNumber && (
+                                <Badge variant="outline" className="text-xs font-mono">
+                                  <FileText className="w-3 h-3 mr-1" />
+                                  {quota.holdedDocNumber}
+                                </Badge>
+                              )}
+                            </div>
                             <p className="text-sm text-muted-foreground">{quota.notes}</p>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                              <Calendar className="w-3 h-3" />
-                              Vencimiento: {quota.dueDate ? new Date(quota.dueDate).toLocaleDateString("es-ES") : "Sin fecha"}
+                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                              <div className="flex items-center gap-1">
+                                <Calendar className="w-3 h-3" />
+                                Vencimiento: {quota.dueDate ? new Date(quota.dueDate).toLocaleDateString("es-ES") : "Sin fecha"}
+                              </div>
+                              {quota.holdedInvoiceId && (
+                                <div className="flex items-center gap-1">
+                                  <Receipt className="w-3 h-3" />
+                                  <span className="text-primary">Factura en Holded</span>
+                                </div>
+                              )}
                             </div>
                           </div>
-                          <div className="text-right">
-                            <div className="text-lg font-bold flex items-center gap-1">
+                          <div className="text-right space-y-1">
+                            <div className="text-lg font-bold flex items-center justify-end gap-1">
                               <Euro className="w-4 h-4" />
                               {quota.amount}
                             </div>
-                            {getStatusBadge(quota.status)}
+                            <div className="flex flex-col gap-1 items-end">
+                              {getStatusBadge(quota.status)}
+                              {getHoldedStatusBadge(quota.holdedStatus)}
+                            </div>
                           </div>
                         </div>
                       );
@@ -447,16 +501,41 @@ export default function Perfil() {
                       return (
                         <div 
                           key={quota.id} 
-                          className="flex items-center justify-between p-3 rounded-md border"
+                          className="flex items-center justify-between p-3 rounded-md border bg-green-50/50 dark:bg-green-950/30"
                           data-testid={`quota-paid-${quota.id}`}
                         >
                           <div className="space-y-1">
-                            <p className="font-medium">{quotaType?.name || "Cuota"}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium">{quotaType?.name || "Cuota"}</p>
+                              {quota.holdedDocNumber && (
+                                <Badge variant="outline" className="text-xs font-mono">
+                                  <FileText className="w-3 h-3 mr-1" />
+                                  {quota.holdedDocNumber}
+                                </Badge>
+                              )}
+                            </div>
                             <p className="text-sm text-muted-foreground">{quota.notes}</p>
+                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                              {quota.paidDate && (
+                                <div className="flex items-center gap-1">
+                                  <CheckCircle className="w-3 h-3 text-green-600" />
+                                  Pagado: {new Date(quota.paidDate).toLocaleDateString("es-ES")}
+                                </div>
+                              )}
+                              {quota.holdedInvoiceId && (
+                                <div className="flex items-center gap-1">
+                                  <Receipt className="w-3 h-3" />
+                                  <span className="text-primary">Factura en Holded</span>
+                                </div>
+                              )}
+                            </div>
                           </div>
                           <div className="flex items-center gap-4">
                             <span className="font-semibold">{quota.amount}€</span>
-                            {getStatusBadge(quota.status)}
+                            <div className="flex flex-col gap-1 items-end">
+                              {getStatusBadge(quota.status)}
+                              {getHoldedStatusBadge(quota.holdedStatus)}
+                            </div>
                           </div>
                         </div>
                       );

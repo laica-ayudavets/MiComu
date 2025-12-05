@@ -1680,8 +1680,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/quota-assignments/user/:userId", requireAuth, async (req: Request, res: Response) => {
     try {
+      const user = (req as any).user;
+      const requestedUserId = req.params.userId;
+      
+      // Only admins can view other users' assignments
+      // Regular users (vecino, presidente) can only view their own
+      if (user.role !== "admin_fincas" && user.role !== "superadmin" && user.id !== requestedUserId) {
+        return res.status(403).json({ error: "No tienes permiso para ver cuotas de otros usuarios" });
+      }
+      
       const communityId = getCommunityId(req);
-      const assignments = await storage.getQuotaAssignmentsByUser(req.params.userId, communityId);
+      const assignments = await storage.getQuotaAssignmentsByUser(requestedUserId, communityId);
       res.json(assignments);
     } catch (error) {
       console.error("Error fetching user quota assignments:", error);
