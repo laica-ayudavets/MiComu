@@ -13,7 +13,7 @@ import {
   requireRole
 } from "./auth";
 import { createGHLBusiness, createGHLContact, updateGHLBusiness, archiveGHLBusiness, updateGHLContact, deactivateGHLContact, reactivateGHLContact, isGHLConfigured } from "./ghl";
-import { createHoldedContact, updateHoldedContact, isHoldedConfigured } from "./holded";
+import { createHoldedContact, updateHoldedContact, isHoldedConfigured, createHoldedInvoice, getHoldedInvoice, getHoldedInvoicesForContact, getInvoiceStatusLabel, sendInvoiceByEmail, markInvoiceAsPaid } from "./holded";
 import { 
   insertIncidentSchema,
   updateIncidentSchema,
@@ -45,7 +45,8 @@ import {
   createAdminWithPasswordSchema,
   users,
   type User,
-  type Community
+  type Community,
+  type QuotaAssignment
 } from "@shared/schema";
 import { z } from "zod";
 import { eq, desc, sql, inArray } from "drizzle-orm";
@@ -1826,9 +1827,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       } else if (monthlyQuotaType.amount !== community.monthlyFee) {
         // Update the quota type amount if community fee changed
-        monthlyQuotaType = await storage.updateQuotaType(monthlyQuotaType.id, communityId, { 
+        const updated = await storage.updateQuotaType(monthlyQuotaType.id, communityId, { 
           amount: community.monthlyFee 
         });
+        if (updated) {
+          monthlyQuotaType = updated;
+        }
+      }
+      
+      if (!monthlyQuotaType) {
+        return res.status(500).json({ error: "Error al crear el tipo de cuota mensual" });
       }
       
       // Get all active vecinos in the community
@@ -1839,8 +1847,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const dueDate = new Date(yearNum, monthNum, 0);
       
       // Create quota assignments for each vecino
-      const createdAssignments = [];
-      const skippedAssignments = [];
+      const createdAssignments: QuotaAssignment[] = [];
+      const skippedAssignments: { userId: string; reason: string }[] = [];
+      const holdedResults: { userId: string; holdedInvoiceId?: string; error?: string }[] = [];
+      
+      const holdedConfigured = isHoldedConfigured();
       
       for (const vecino of activeVecinos) {
         // Check if assignment already exists for this month
@@ -1856,6 +1867,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           continue;
         }
         
+        // Create the quota assignment
         const assignment = await storage.createQuotaAssignment({
           communityId,
           quotaTypeId: monthlyQuotaType.id,
@@ -1864,7 +1876,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
           dueDate,
           status: "pendiente",
           notes: `Cuota mensual ${monthNum.toString().padStart(2, '0')}/${yearNum}`,
+          periodMonth: monthNum,
+          periodYear: yearNum,
         });
+        
+        // Sync to Holded if configured
+        if (holdedConfigured) {
+          try {
+            // Ensure user has a Holded contact
+            let holdedContactId = vecino.holdedContactId;
+            if (!holdedContactId) {
+              console.log(`[Holded] Creating contact for user: ${vecino.email}`);
+              holdedContactId = await createHoldedContact(vecino, community);
+              if (holdedContactId) {
+                await storage.updateUserHoldedId(vecino.id, holdedContactId);
+              }
+            }
+            
+            if (holdedContactId) {
+              // Create invoice in Holded
+              const holdedInvoiceId = await createHoldedInvoice({
+                contactId: holdedContactId,
+                items: [{
+                  name: monthlyQuotaType.name || "Cuota Ordinaria Mensual",
+                  desc: `Cuota mensual ${monthNum.toString().padStart(2, '0')}/${yearNum} - ${community.name}`,
+                  units: 1,
+                  subtotal: parseFloat(community.monthlyFee),
+                  tax: 0, // Community fees typically don't have IVA
+                }],
+                date: new Date(),
+                dueDate: dueDate,
+                notes: `Comunidad: ${community.name}`,
+              });
+              
+              if (holdedInvoiceId) {
+                // Get invoice details for doc number
+                const invoiceDetails = await getHoldedInvoice(holdedInvoiceId);
+                
+                // Update assignment with Holded data
+                await storage.updateQuotaAssignmentFull(assignment.id, communityId, {
+                  holdedInvoiceId,
+                  holdedDocNumber: invoiceDetails?.docNumber || null,
+                  holdedStatus: invoiceDetails?.status ?? 1, // Default to "not paid" (1)
+                  holdedSyncedAt: new Date(),
+                });
+                
+                holdedResults.push({ userId: vecino.id, holdedInvoiceId });
+                
+                // Optionally send invoice by email
+                if (vecino.email) {
+                  sendInvoiceByEmail(holdedInvoiceId, vecino.email).catch(err => {
+                    console.error(`[Holded] Failed to send invoice to ${vecino.email}:`, err);
+                  });
+                }
+              } else {
+                holdedResults.push({ userId: vecino.id, error: "Failed to create Holded invoice" });
+              }
+            } else {
+              holdedResults.push({ userId: vecino.id, error: "Failed to create Holded contact" });
+            }
+          } catch (holdedError) {
+            console.error(`[Holded] Error syncing invoice for user ${vecino.id}:`, holdedError);
+            holdedResults.push({ userId: vecino.id, error: String(holdedError) });
+          }
+        }
         
         createdAssignments.push(assignment);
       }
@@ -1875,6 +1950,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         skipped: skippedAssignments.length,
         assignments: createdAssignments,
         skippedDetails: skippedAssignments,
+        holdedSync: holdedConfigured ? {
+          configured: true,
+          results: holdedResults,
+          success: holdedResults.filter(r => r.holdedInvoiceId).length,
+          failed: holdedResults.filter(r => r.error).length,
+        } : { configured: false },
       });
     } catch (error) {
       console.error("Error generating monthly invoices:", error);
@@ -1896,23 +1977,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Holded integration not configured" });
       }
       
-      // Get user and quota type
-      const user = await storage.getUserById(assignment.userId);
+      // Check if already synced
+      if (assignment.holdedInvoiceId) {
+        return res.status(400).json({ error: "Esta cuota ya está sincronizada con Holded" });
+      }
+      
+      // Get user and community
+      const user = await storage.getUser(assignment.userId);
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
       
-      if (!user.holdedContactId) {
-        return res.status(400).json({ error: "El usuario no tiene un contacto de Holded. Sincronice el usuario primero." });
+      const community = await storage.getCommunity(communityId);
+      
+      // Ensure user has a Holded contact
+      let holdedContactId = user.holdedContactId;
+      if (!holdedContactId) {
+        holdedContactId = await createHoldedContact(user, community || null);
+        if (holdedContactId) {
+          await storage.updateUserHoldedId(user.id, holdedContactId);
+        } else {
+          return res.status(500).json({ error: "No se pudo crear el contacto en Holded" });
+        }
       }
       
       const quotaType = await storage.getQuotaType(assignment.quotaTypeId, communityId);
       
-      // Import createHoldedInvoice
-      const { createHoldedInvoice } = await import("./holded");
-      
       const holdedInvoiceId = await createHoldedInvoice({
-        contactId: user.holdedContactId,
+        contactId: holdedContactId,
         items: [{
           name: quotaType?.name || "Cuota de comunidad",
           desc: assignment.notes || "",
@@ -1922,18 +2014,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }],
         date: new Date(),
         dueDate: new Date(assignment.dueDate),
-        notes: `Cuota ${quotaType?.name} - ${assignment.notes || ""}`,
+        notes: `Cuota ${quotaType?.name} - ${community?.name || ""}`,
       });
       
       if (!holdedInvoiceId) {
         return res.status(500).json({ error: "Failed to create invoice in Holded" });
       }
       
-      // Update the assignment with holdedInvoiceId (we'll need to add this field)
-      // For now, just return success
+      // Get invoice details for doc number
+      const invoiceDetails = await getHoldedInvoice(holdedInvoiceId);
+      
+      // Update the assignment with Holded data
+      const updatedAssignment = await storage.updateQuotaAssignmentFull(assignment.id, communityId, {
+        holdedInvoiceId,
+        holdedDocNumber: invoiceDetails?.docNumber || null,
+        holdedStatus: invoiceDetails?.status ?? 1,
+        holdedSyncedAt: new Date(),
+      });
+      
       res.json({
         success: true,
         holdedInvoiceId,
+        holdedDocNumber: invoiceDetails?.docNumber,
+        assignment: updatedAssignment,
         message: "Factura creada en Holded correctamente",
       });
     } catch (error) {
@@ -1949,11 +2052,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { userId } = req.params;
       
       // Users can only view their own invoices, admin_fincas can view any
-      if (currentUser.role !== "admin_fincas" && currentUser.id !== userId) {
+      if (currentUser.role !== "admin_fincas" && currentUser.role !== "superadmin" && currentUser.id !== userId) {
         return res.status(403).json({ error: "Access denied" });
       }
       
-      const user = await storage.getUserById(userId);
+      const user = await storage.getUser(userId);
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
@@ -1965,8 +2068,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!isHoldedConfigured()) {
         return res.status(400).json({ error: "Holded integration not configured" });
       }
-      
-      const { getHoldedInvoicesForContact, getInvoiceStatusLabel } = await import("./holded");
       
       const invoices = await getHoldedInvoicesForContact(user.holdedContactId);
       
@@ -2000,16 +2101,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const communityId = getCommunityId(req);
       const { paidDate } = req.body;
       
-      const assignment = await storage.updateQuotaAssignment(req.params.id, communityId, {
-        status: "pagada",
-        paidDate: paidDate ? new Date(paidDate) : new Date(),
-      });
-      
-      if (!assignment) {
+      // First get the current assignment
+      const currentAssignment = await storage.getQuotaAssignment(req.params.id, communityId);
+      if (!currentAssignment) {
         return res.status(404).json({ error: "Quota assignment not found" });
       }
       
-      res.json(assignment);
+      const paymentDate = paidDate ? new Date(paidDate) : new Date();
+      
+      // Update in our database
+      const assignment = await storage.updateQuotaAssignmentFull(req.params.id, communityId, {
+        status: "pagada",
+        paidDate: paymentDate,
+        holdedStatus: 2, // 2 = paid in Holded
+      });
+      
+      // Sync to Holded if configured and has invoice ID
+      let holdedSynced = false;
+      if (isHoldedConfigured() && currentAssignment.holdedInvoiceId) {
+        try {
+          holdedSynced = await markInvoiceAsPaid(currentAssignment.holdedInvoiceId, paymentDate);
+          if (holdedSynced) {
+            console.log(`[Holded] Invoice ${currentAssignment.holdedInvoiceId} marked as paid`);
+          }
+        } catch (holdedError) {
+          console.error(`[Holded] Error marking invoice as paid:`, holdedError);
+        }
+      }
+      
+      res.json({
+        ...assignment,
+        holdedSynced,
+      });
     } catch (error) {
       console.error("Error marking quota as paid:", error);
       res.status(500).json({ error: "Internal server error" });
