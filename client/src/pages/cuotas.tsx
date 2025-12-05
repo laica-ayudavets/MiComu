@@ -51,6 +51,8 @@ export default function Cuotas() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedMonth, setSelectedMonth] = useState(String(new Date().getMonth() + 1));
   const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
+  const [invoiceAmount, setInvoiceAmount] = useState("");
+  const [taxPercentage, setTaxPercentage] = useState("0");
   const { toast } = useToast();
   const { data: currentCommunity } = useCurrentCommunity();
   const { data: currentUser } = useUser();
@@ -232,8 +234,13 @@ export default function Cuotas() {
   });
 
   const generateMonthlyMutation = useMutation({
-    mutationFn: async ({ month, year }: { month: string; year: string }) => {
-      const res = await apiRequest("POST", "/api/invoices/generate-monthly", { month, year });
+    mutationFn: async ({ month, year, amount, taxPercent }: { month: string; year: string; amount: string; taxPercent: string }) => {
+      const res = await apiRequest("POST", "/api/invoices/generate-monthly", { 
+        month, 
+        year,
+        amount: parseFloat(amount),
+        taxPercentage: parseFloat(taxPercent),
+      });
       return res.json();
     },
     onSuccess: (data) => {
@@ -984,12 +991,17 @@ export default function Cuotas() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={generateDialogOpen} onOpenChange={setGenerateDialogOpen}>
+      <Dialog open={generateDialogOpen} onOpenChange={(open) => {
+        setGenerateDialogOpen(open);
+        if (open && currentCommunity?.monthlyFee) {
+          setInvoiceAmount(currentCommunity.monthlyFee);
+        }
+      }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Confirmar Generación de Cuotas</DialogTitle>
+            <DialogTitle>Generar Cuotas Mensuales</DialogTitle>
             <DialogDescription>
-              Se generarán cuotas mensuales para todos los vecinos activos de la comunidad.
+              Configura el importe y el IVA para las cuotas de este mes.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -1004,10 +1016,69 @@ export default function Cuotas() {
                   {["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"][parseInt(selectedMonth)]} {selectedYear}
                 </span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Cuota por vecino:</span>
-                <span className="font-medium">{currentCommunity?.monthlyFee}€</span>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Importe Total (con IVA)</label>
+                <div className="relative">
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={invoiceAmount}
+                    onChange={(e) => setInvoiceAmount(e.target.value)}
+                    placeholder="0.00"
+                    className="pr-8"
+                    data-testid="input-invoice-amount"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">€</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Este es el importe final que pagará cada vecino.
+                </p>
               </div>
+              
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Porcentaje de IVA</label>
+                <div className="relative">
+                  <Select value={taxPercentage} onValueChange={setTaxPercentage}>
+                    <SelectTrigger data-testid="select-tax-percentage">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">0% (Sin IVA)</SelectItem>
+                      <SelectItem value="4">4% (IVA Superreducido)</SelectItem>
+                      <SelectItem value="10">10% (IVA Reducido)</SelectItem>
+                      <SelectItem value="21">21% (IVA General)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Las cuotas de comunidad normalmente no llevan IVA (0%).
+                </p>
+              </div>
+              
+              {invoiceAmount && parseFloat(invoiceAmount) > 0 && (
+                <div className="rounded-md bg-muted p-3 space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Base imponible:</span>
+                    <span className="font-medium">
+                      {(parseFloat(invoiceAmount) / (1 + parseFloat(taxPercentage) / 100)).toFixed(2)}€
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">IVA ({taxPercentage}%):</span>
+                    <span className="font-medium">
+                      {(parseFloat(invoiceAmount) - parseFloat(invoiceAmount) / (1 + parseFloat(taxPercentage) / 100)).toFixed(2)}€
+                    </span>
+                  </div>
+                  <div className="flex justify-between border-t pt-1">
+                    <span className="font-medium">Total:</span>
+                    <span className="font-bold">{parseFloat(invoiceAmount).toFixed(2)}€</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>
@@ -1015,8 +1086,13 @@ export default function Cuotas() {
               Cancelar
             </Button>
             <Button 
-              onClick={() => generateMonthlyMutation.mutate({ month: selectedMonth, year: selectedYear })}
-              disabled={generateMonthlyMutation.isPending}
+              onClick={() => generateMonthlyMutation.mutate({ 
+                month: selectedMonth, 
+                year: selectedYear,
+                amount: invoiceAmount,
+                taxPercent: taxPercentage,
+              })}
+              disabled={generateMonthlyMutation.isPending || !invoiceAmount || parseFloat(invoiceAmount) <= 0}
               data-testid="button-confirm-generate"
             >
               {generateMonthlyMutation.isPending ? "Generando..." : "Confirmar y Generar"}

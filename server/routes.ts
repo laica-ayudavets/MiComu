@@ -1800,7 +1800,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/invoices/generate-monthly", requireRole("admin_fincas"), async (req: Request, res: Response) => {
     try {
       const communityId = getCommunityId(req);
-      const { month, year } = req.body;
+      const { month, year, amount, taxPercentage } = req.body;
       
       // Validate month and year
       if (!month || !year) {
@@ -1814,15 +1814,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid month" });
       }
       
-      // Get community to check monthly fee
+      // Get community info
       const community = await storage.getCommunity(communityId);
       if (!community) {
         return res.status(404).json({ error: "Community not found" });
       }
       
-      if (!community.monthlyFee) {
-        return res.status(400).json({ error: "La comunidad no tiene configurada una cuota mensual" });
+      // Use provided amount or fall back to community monthly fee
+      const totalAmount = amount !== undefined ? parseFloat(amount) : (community.monthlyFee ? parseFloat(community.monthlyFee) : 0);
+      const taxPercent = taxPercentage !== undefined ? parseFloat(taxPercentage) : 0;
+      
+      if (totalAmount <= 0) {
+        return res.status(400).json({ error: "El importe debe ser mayor que 0" });
       }
+      
+      // Calculate base amount (subtotal) from total amount with tax
+      // Total = Base * (1 + tax/100) => Base = Total / (1 + tax/100)
+      const baseAmount = totalAmount / (1 + taxPercent / 100);
+      const formattedAmount = totalAmount.toFixed(2);
       
       // Get or create the monthly quota type
       let monthlyQuotaType = await storage.getQuotaTypeByName(communityId, "Cuota Ordinaria Mensual");
@@ -1831,14 +1840,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           communityId,
           name: "Cuota Ordinaria Mensual",
           description: "Cuota de comunidad mensual",
-          amount: community.monthlyFee,
+          amount: formattedAmount,
           frequency: "mensual",
           isActive: true,
         });
-      } else if (monthlyQuotaType.amount !== community.monthlyFee) {
-        // Update the quota type amount if community fee changed
+      } else if (monthlyQuotaType.amount !== formattedAmount) {
+        // Update the quota type amount if it changed
         const updated = await storage.updateQuotaType(monthlyQuotaType.id, communityId, { 
-          amount: community.monthlyFee 
+          amount: formattedAmount 
         });
         if (updated) {
           monthlyQuotaType = updated;
@@ -1877,12 +1886,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           continue;
         }
         
-        // Create the quota assignment
+        // Create the quota assignment with the total amount (including tax)
         const assignment = await storage.createQuotaAssignment({
           communityId,
           quotaTypeId: monthlyQuotaType.id,
           userId: vecino.id,
-          amount: community.monthlyFee,
+          amount: formattedAmount,
           dueDate,
           status: "pendiente",
           notes: `Cuota mensual ${monthNum.toString().padStart(2, '0')}/${yearNum}`,
@@ -1904,15 +1913,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
             
             if (holdedContactId) {
-              // Create invoice in Holded
+              // Create invoice in Holded with proper base amount and tax
+              // Holded expects: subtotal (base) + tax percentage = total
               const holdedInvoiceId = await createHoldedInvoice({
                 contactId: holdedContactId,
                 items: [{
                   name: monthlyQuotaType.name || "Cuota Ordinaria Mensual",
                   desc: `Cuota mensual ${monthNum.toString().padStart(2, '0')}/${yearNum} - ${community.name}`,
                   units: 1,
-                  subtotal: parseFloat(community.monthlyFee),
-                  tax: 0, // Community fees typically don't have IVA
+                  subtotal: parseFloat(baseAmount.toFixed(2)), // Base amount before tax
+                  tax: taxPercent, // Tax percentage (e.g., 21 for 21%)
                 }],
                 date: new Date(),
                 dueDate: dueDate,
