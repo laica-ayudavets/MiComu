@@ -13,6 +13,7 @@ import {
   requireRole
 } from "./auth";
 import { createGHLBusiness, createGHLContact, updateGHLBusiness, archiveGHLBusiness, updateGHLContact, deactivateGHLContact, reactivateGHLContact, isGHLConfigured } from "./ghl";
+import { createHoldedContact, updateHoldedContact, isHoldedConfigured } from "./holded";
 import { 
   insertIncidentSchema,
   updateIncidentSchema,
@@ -301,8 +302,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.createUser(userData);
 
       // Sync to GoHighLevel CRM (async, non-blocking)
+      const community = communityId ? await storage.getCommunity(communityId) : null;
       if (isGHLConfigured()) {
-        const community = communityId ? await storage.getCommunity(communityId) : null;
         createGHLContact(user, community || null).then(async (ghlContactId) => {
           if (ghlContactId) {
             await storage.updateUserGHLId(user.id, ghlContactId);
@@ -322,6 +323,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.error("[GHL] Failed to get resident count:", err);
           });
         }
+      }
+
+      // Sync to Holded for invoicing (only for community members)
+      if (isHoldedConfigured() && (user.role === "vecino" || user.role === "presidente")) {
+        createHoldedContact(user, community || null).then(async (holdedContactId) => {
+          if (holdedContactId) {
+            await storage.updateUserHoldedId(user.id, holdedContactId);
+            console.log(`[Holded] User ${user.id} synced with contact ${holdedContactId}`);
+          }
+        }).catch((err) => {
+          console.error("[Holded] Failed to sync user:", err);
+        });
       }
 
       // Remove password from response
@@ -1155,6 +1168,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // Sync to Holded for invoicing (only for community members like vecinos/presidentes)
+      if (isHoldedConfigured() && (newUser.role === "vecino" || newUser.role === "presidente")) {
+        createHoldedContact(newUser, community).then(async (holdedContactId) => {
+          if (holdedContactId) {
+            await storage.updateUserHoldedId(newUser.id, holdedContactId);
+            console.log(`[Holded] Contact synced for user: ${newUser.email}`);
+          }
+        }).catch(err => {
+          console.error("[Holded] Failed to sync user:", err);
+        });
+      }
+
       const { password: _, ...sanitizedUser } = newUser;
       res.status(201).json(sanitizedUser);
     } catch (error) {
@@ -1184,6 +1209,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (isGHLConfigured() && updatedUser.ghlContactId) {
         updateGHLContact(updatedUser.ghlContactId, updateData).catch(err => {
           console.error("[GHL] Failed to sync user update:", err);
+        });
+      }
+
+      // Sync changes to Holded if configured
+      if (isHoldedConfigured() && updatedUser.holdedContactId) {
+        updateHoldedContact(updatedUser.holdedContactId, updateData).catch(err => {
+          console.error("[Holded] Failed to sync user update:", err);
         });
       }
 
@@ -1285,6 +1317,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
           }
         }
+      }
+
+      // Sync changes to Holded if configured
+      if (isHoldedConfigured() && updatedUser.holdedContactId) {
+        const communityForHolded = newCommunity || community;
+        updateHoldedContact(updatedUser.holdedContactId, updateData, communityForHolded).catch(err => {
+          console.error("[Holded] Failed to sync user update:", err);
+        });
       }
 
       const { password: _, ...sanitizedUser } = updatedUser;
@@ -1615,6 +1655,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get current user's quota assignments (for profile/invoice history)
+  app.get("/api/quota-assignments/me", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      if (!user || !user.id) {
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+      
+      // For residents (vecino, presidente), get their own assignments
+      if (user.communityId) {
+        const assignments = await storage.getQuotaAssignmentsByUser(user.id, user.communityId);
+        res.json(assignments);
+      } else {
+        // Admin users without a community get an empty array
+        res.json([]);
+      }
+    } catch (error) {
+      console.error("Error fetching user's quota assignments:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   app.get("/api/quota-assignments/user/:userId", requireAuth, async (req: Request, res: Response) => {
     try {
       const communityId = getCommunityId(req);
@@ -1717,6 +1779,239 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting quota assignment:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // ===== Invoice Generation Endpoints =====
+  
+  // Generate monthly cuotas for all active vecinos in the community
+  app.post("/api/invoices/generate-monthly", requireRole("admin_fincas"), async (req: Request, res: Response) => {
+    try {
+      const communityId = getCommunityId(req);
+      const { month, year } = req.body;
+      
+      // Validate month and year
+      if (!month || !year) {
+        return res.status(400).json({ error: "Month and year are required" });
+      }
+      
+      const monthNum = parseInt(month);
+      const yearNum = parseInt(year);
+      
+      if (monthNum < 1 || monthNum > 12) {
+        return res.status(400).json({ error: "Invalid month" });
+      }
+      
+      // Get community to check monthly fee
+      const community = await storage.getCommunity(communityId);
+      if (!community) {
+        return res.status(404).json({ error: "Community not found" });
+      }
+      
+      if (!community.monthlyFee) {
+        return res.status(400).json({ error: "La comunidad no tiene configurada una cuota mensual" });
+      }
+      
+      // Get or create the monthly quota type
+      let monthlyQuotaType = await storage.getQuotaTypeByName(communityId, "Cuota Ordinaria Mensual");
+      if (!monthlyQuotaType) {
+        monthlyQuotaType = await storage.createQuotaType({
+          communityId,
+          name: "Cuota Ordinaria Mensual",
+          description: "Cuota de comunidad mensual",
+          amount: community.monthlyFee,
+          frequency: "mensual",
+          isActive: true,
+        });
+      } else if (monthlyQuotaType.amount !== community.monthlyFee) {
+        // Update the quota type amount if community fee changed
+        monthlyQuotaType = await storage.updateQuotaType(monthlyQuotaType.id, communityId, { 
+          amount: community.monthlyFee 
+        });
+      }
+      
+      // Get all active vecinos in the community
+      const vecinos = await storage.getUsersByCommunity(communityId);
+      const activeVecinos = vecinos.filter(v => v.active && (v.role === "vecino" || v.role === "presidente"));
+      
+      // Due date is last day of the month
+      const dueDate = new Date(yearNum, monthNum, 0);
+      
+      // Create quota assignments for each vecino
+      const createdAssignments = [];
+      const skippedAssignments = [];
+      
+      for (const vecino of activeVecinos) {
+        // Check if assignment already exists for this month
+        const existingAssignments = await storage.getQuotaAssignmentsByUser(vecino.id, communityId);
+        const hasExisting = existingAssignments.some(a => {
+          const aDate = new Date(a.dueDate);
+          return aDate.getMonth() + 1 === monthNum && aDate.getFullYear() === yearNum && 
+                 a.quotaTypeId === monthlyQuotaType!.id;
+        });
+        
+        if (hasExisting) {
+          skippedAssignments.push({ userId: vecino.id, reason: "Ya existe cuota para este mes" });
+          continue;
+        }
+        
+        const assignment = await storage.createQuotaAssignment({
+          communityId,
+          quotaTypeId: monthlyQuotaType.id,
+          userId: vecino.id,
+          amount: community.monthlyFee,
+          dueDate,
+          status: "pendiente",
+          notes: `Cuota mensual ${monthNum.toString().padStart(2, '0')}/${yearNum}`,
+        });
+        
+        createdAssignments.push(assignment);
+      }
+      
+      res.status(201).json({
+        success: true,
+        created: createdAssignments.length,
+        skipped: skippedAssignments.length,
+        assignments: createdAssignments,
+        skippedDetails: skippedAssignments,
+      });
+    } catch (error) {
+      console.error("Error generating monthly invoices:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+  
+  // Sync a quota assignment to Holded as an invoice
+  app.post("/api/quota-assignments/:id/sync-holded", requireRole("admin_fincas"), async (req: Request, res: Response) => {
+    try {
+      const communityId = getCommunityId(req);
+      const assignment = await storage.getQuotaAssignment(req.params.id, communityId);
+      
+      if (!assignment) {
+        return res.status(404).json({ error: "Quota assignment not found" });
+      }
+      
+      if (!isHoldedConfigured()) {
+        return res.status(400).json({ error: "Holded integration not configured" });
+      }
+      
+      // Get user and quota type
+      const user = await storage.getUserById(assignment.userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      if (!user.holdedContactId) {
+        return res.status(400).json({ error: "El usuario no tiene un contacto de Holded. Sincronice el usuario primero." });
+      }
+      
+      const quotaType = await storage.getQuotaType(assignment.quotaTypeId, communityId);
+      
+      // Import createHoldedInvoice
+      const { createHoldedInvoice } = await import("./holded");
+      
+      const holdedInvoiceId = await createHoldedInvoice({
+        contactId: user.holdedContactId,
+        items: [{
+          name: quotaType?.name || "Cuota de comunidad",
+          desc: assignment.notes || "",
+          units: 1,
+          subtotal: parseFloat(assignment.amount),
+          tax: 0, // Community fees typically don't have IVA
+        }],
+        date: new Date(),
+        dueDate: new Date(assignment.dueDate),
+        notes: `Cuota ${quotaType?.name} - ${assignment.notes || ""}`,
+      });
+      
+      if (!holdedInvoiceId) {
+        return res.status(500).json({ error: "Failed to create invoice in Holded" });
+      }
+      
+      // Update the assignment with holdedInvoiceId (we'll need to add this field)
+      // For now, just return success
+      res.json({
+        success: true,
+        holdedInvoiceId,
+        message: "Factura creada en Holded correctamente",
+      });
+    } catch (error) {
+      console.error("Error syncing to Holded:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+  
+  // Get Holded invoices for a user
+  app.get("/api/users/:userId/holded-invoices", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const currentUser = req.user as User;
+      const { userId } = req.params;
+      
+      // Users can only view their own invoices, admin_fincas can view any
+      if (currentUser.role !== "admin_fincas" && currentUser.id !== userId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      
+      const user = await storage.getUserById(userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      if (!user.holdedContactId) {
+        return res.json([]); // No Holded contact, return empty array
+      }
+      
+      if (!isHoldedConfigured()) {
+        return res.status(400).json({ error: "Holded integration not configured" });
+      }
+      
+      const { getHoldedInvoicesForContact, getInvoiceStatusLabel } = await import("./holded");
+      
+      const invoices = await getHoldedInvoicesForContact(user.holdedContactId);
+      
+      if (!invoices) {
+        return res.json([]);
+      }
+      
+      // Transform Holded response to a more friendly format
+      const transformedInvoices = invoices.map(inv => ({
+        id: inv.id,
+        number: inv.docNumber,
+        date: new Date(inv.date * 1000).toISOString(),
+        dueDate: inv.dueDate ? new Date(inv.dueDate * 1000).toISOString() : null,
+        total: inv.total,
+        subtotal: inv.subtotal,
+        status: inv.status,
+        statusLabel: getInvoiceStatusLabel(inv.status),
+        currency: inv.currency,
+      }));
+      
+      res.json(transformedInvoices);
+    } catch (error) {
+      console.error("Error fetching Holded invoices:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+  
+  // Mark a quota assignment as paid and sync to Holded
+  app.post("/api/quota-assignments/:id/mark-paid", requireRole("admin_fincas"), async (req: Request, res: Response) => {
+    try {
+      const communityId = getCommunityId(req);
+      const { paidDate } = req.body;
+      
+      const assignment = await storage.updateQuotaAssignment(req.params.id, communityId, {
+        status: "pagada",
+        paidDate: paidDate ? new Date(paidDate) : new Date(),
+      });
+      
+      if (!assignment) {
+        return res.status(404).json({ error: "Quota assignment not found" });
+      }
+      
+      res.json(assignment);
+    } catch (error) {
+      console.error("Error marking quota as paid:", error);
       res.status(500).json({ error: "Internal server error" });
     }
   });

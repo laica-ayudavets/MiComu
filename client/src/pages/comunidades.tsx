@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Redirect } from "wouter";
-import { Building2, MapPin, Search, Users, Plus, Pencil, Trash2, Eye, EyeOff } from "lucide-react";
+import { Building2, MapPin, Search, Users, Plus, Pencil, Trash2, Eye, EyeOff, Euro } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +24,7 @@ const communityFormSchema = z.object({
   postalCode: z.string().optional(),
   province: z.string().optional(),
   totalUnits: z.coerce.number().min(1, "Debe tener al menos 1 unidad"),
+  monthlyFee: z.string().optional().transform(val => val === "" ? undefined : val),
 });
 
 type CommunityFormValues = z.infer<typeof communityFormSchema>;
@@ -54,6 +55,7 @@ export default function Comunidades() {
       postalCode: "",
       province: "",
       totalUnits: 1,
+      monthlyFee: "",
     },
   });
 
@@ -66,6 +68,7 @@ export default function Comunidades() {
       postalCode: "",
       province: "",
       totalUnits: 1,
+      monthlyFee: "",
     },
   });
 
@@ -171,6 +174,7 @@ export default function Comunidades() {
       postalCode: community.postalCode || "",
       province: community.province || "",
       totalUnits: community.totalUnits,
+      monthlyFee: community.monthlyFee || "",
     });
     setIsEditDialogOpen(true);
   };
@@ -336,6 +340,14 @@ export default function Comunidades() {
                         {(community as any).residentCount ?? 0} residentes · {community.totalUnits} unidades
                       </span>
                     </div>
+                    {community.monthlyFee && (
+                      <div className="flex items-center gap-2">
+                        <Euro className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-muted-foreground">
+                          Cuota mensual: {community.monthlyFee}€
+                        </span>
+                      </div>
+                    )}
                   </div>
                   {!isActive && (
                     <Button
@@ -432,19 +444,34 @@ export default function Comunidades() {
                   </FormItem>
                 )}
               />
-              <FormField
-                control={createForm.control}
-                name="totalUnits"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Número de viviendas/unidades</FormLabel>
-                    <FormControl>
-                      <Input type="number" min="1" placeholder="Ej: 24" data-testid="input-community-units" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={createForm.control}
+                  name="totalUnits"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Viviendas/unidades</FormLabel>
+                      <FormControl>
+                        <Input type="number" min="1" placeholder="Ej: 24" data-testid="input-community-units" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={createForm.control}
+                  name="monthlyFee"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Cuota mensual</FormLabel>
+                      <FormControl>
+                        <Input type="text" placeholder="Ej: 75.00" data-testid="input-community-fee" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
                   Cancelar
@@ -539,19 +566,34 @@ export default function Comunidades() {
                   </FormItem>
                 )}
               />
-              <FormField
-                control={editForm.control}
-                name="totalUnits"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Número de viviendas/unidades</FormLabel>
-                    <FormControl>
-                      <Input type="number" min="1" placeholder="Ej: 24" data-testid="input-edit-units" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={editForm.control}
+                  name="totalUnits"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Viviendas/unidades</FormLabel>
+                      <FormControl>
+                        <Input type="number" min="1" placeholder="Ej: 24" data-testid="input-edit-units" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={editForm.control}
+                  name="monthlyFee"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Cuota mensual</FormLabel>
+                      <FormControl>
+                        <Input type="text" placeholder="Ej: 75.00" data-testid="input-edit-fee" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
                   Cancelar

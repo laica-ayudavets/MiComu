@@ -8,8 +8,8 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -17,8 +17,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
-import { useCurrentCommunity } from "@/hooks/use-auth";
-import { Plus, Pencil, Trash2, AlertCircle, CheckCircle, Clock, Euro, CalendarIcon } from "lucide-react";
+import { useCurrentCommunity, useUser } from "@/hooks/use-auth";
+import { Plus, Pencil, Trash2, AlertCircle, CheckCircle, Clock, Euro, CalendarIcon, FileText, Users, Zap } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -42,14 +42,20 @@ type User = {
 };
 
 export default function Cuotas() {
-  const [activeTab, setActiveTab] = useState("types");
+  const [activeTab, setActiveTab] = useState("generate");
   const [typeDialogOpen, setTypeDialogOpen] = useState(false);
   const [assignmentDialogOpen, setAssignmentDialogOpen] = useState(false);
+  const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
   const [editingType, setEditingType] = useState<QuotaType | null>(null);
   const [editingAssignment, setEditingAssignment] = useState<QuotaAssignment | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedMonth, setSelectedMonth] = useState(String(new Date().getMonth() + 1));
+  const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
   const { toast } = useToast();
   const { data: currentCommunity } = useCurrentCommunity();
+  const { data: currentUser } = useUser();
+  
+  const isAdmin = currentUser?.role === "admin_fincas";
 
   const { data: quotaTypes = [], isLoading: loadingTypes } = useQuery<QuotaType[]>({
     queryKey: ["/api/quota-types"],
@@ -225,6 +231,50 @@ export default function Cuotas() {
     },
   });
 
+  const generateMonthlyMutation = useMutation({
+    mutationFn: async ({ month, year }: { month: string; year: string }) => {
+      const res = await apiRequest("POST", "/api/invoices/generate-monthly", { month, year });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/quota-assignments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/quota-types"] });
+      setGenerateDialogOpen(false);
+      toast({
+        title: "Cuotas generadas",
+        description: `Se han creado ${data.created} cuotas. ${data.skipped > 0 ? `${data.skipped} ya existían.` : ""}`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const markPaidMutation = useMutation({
+    mutationFn: async ({ id, paidDate }: { id: string; paidDate?: Date }) => {
+      const res = await apiRequest("POST", `/api/quota-assignments/${id}/mark-paid`, { paidDate });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/quota-assignments"] });
+      toast({
+        title: "Pago registrado",
+        description: "La cuota se ha marcado como pagada",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const onSubmitType = (data: QuotaTypeFormValues) => {
     if (!currentCommunity?.id) {
       toast({
@@ -380,13 +430,153 @@ export default function Cuotas() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList>
-          <TabsTrigger value="types" data-testid="tab-quota-types">
-            Tipos de Cuotas
+          <TabsTrigger value="generate" data-testid="tab-generate">
+            Generar Cuotas
           </TabsTrigger>
           <TabsTrigger value="assignments" data-testid="tab-quota-assignments">
             Asignaciones
           </TabsTrigger>
+          <TabsTrigger value="types" data-testid="tab-quota-types">
+            Tipos de Cuotas
+          </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="generate" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Zap className="w-5 h-5" />
+                Generar Cuotas Mensuales
+              </CardTitle>
+              <CardDescription>
+                Genera automáticamente las cuotas mensuales para todos los vecinos activos de la comunidad
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {!currentCommunity?.monthlyFee ? (
+                <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-amber-800 dark:bg-amber-950 dark:border-amber-800 dark:text-amber-200">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5" />
+                    <p className="font-medium">Cuota mensual no configurada</p>
+                  </div>
+                  <p className="mt-1 text-sm">
+                    Configura la cuota mensual en la página de Comunidades para poder generar cuotas automáticamente.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center gap-4 text-sm">
+                    <div className="flex items-center gap-2">
+                      <Euro className="w-4 h-4 text-muted-foreground" />
+                      <span className="font-medium">Cuota mensual:</span>
+                      <span className="text-lg font-bold">{currentCommunity.monthlyFee}€</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Users className="w-4 h-4 text-muted-foreground" />
+                      <span className="font-medium">Vecinos activos:</span>
+                      <span>{vecinos.filter(v => users.find(u => u.id === v.id)).length}</span>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-end gap-4 flex-wrap">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Mes</label>
+                      <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                        <SelectTrigger className="w-[140px]" data-testid="select-month">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1">Enero</SelectItem>
+                          <SelectItem value="2">Febrero</SelectItem>
+                          <SelectItem value="3">Marzo</SelectItem>
+                          <SelectItem value="4">Abril</SelectItem>
+                          <SelectItem value="5">Mayo</SelectItem>
+                          <SelectItem value="6">Junio</SelectItem>
+                          <SelectItem value="7">Julio</SelectItem>
+                          <SelectItem value="8">Agosto</SelectItem>
+                          <SelectItem value="9">Septiembre</SelectItem>
+                          <SelectItem value="10">Octubre</SelectItem>
+                          <SelectItem value="11">Noviembre</SelectItem>
+                          <SelectItem value="12">Diciembre</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Año</label>
+                      <Select value={selectedYear} onValueChange={setSelectedYear}>
+                        <SelectTrigger className="w-[100px]" data-testid="select-year">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="2024">2024</SelectItem>
+                          <SelectItem value="2025">2025</SelectItem>
+                          <SelectItem value="2026">2026</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {isAdmin && (
+                      <Button 
+                        onClick={() => setGenerateDialogOpen(true)}
+                        disabled={generateMonthlyMutation.isPending}
+                        data-testid="button-generate-monthly"
+                      >
+                        <FileText className="w-4 h-4 mr-2" />
+                        {generateMonthlyMutation.isPending ? "Generando..." : "Generar Cuotas"}
+                      </Button>
+                    )}
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Cuotas Recientes</CardTitle>
+              <CardDescription>
+                Últimas cuotas generadas para esta comunidad
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loadingAssignments ? (
+                <p className="text-muted-foreground">Cargando...</p>
+              ) : quotaAssignments.length === 0 ? (
+                <p className="text-muted-foreground">No hay cuotas generadas aún</p>
+              ) : (
+                <div className="space-y-2">
+                  {quotaAssignments.slice(0, 5).map((assignment) => {
+                    const user = users.find(u => u.id === assignment.userId);
+                    const quotaType = quotaTypes.find(t => t.id === assignment.quotaTypeId);
+                    return (
+                      <div key={assignment.id} className="flex items-center justify-between p-3 rounded-md border">
+                        <div className="space-y-1">
+                          <p className="font-medium">{user?.fullName || user?.email}</p>
+                          <p className="text-sm text-muted-foreground">{quotaType?.name} - {assignment.notes}</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="font-semibold">{assignment.amount}€</span>
+                          {getStatusBadge(assignment.status)}
+                          {isAdmin && assignment.status === "pendiente" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => markPaidMutation.mutate({ id: assignment.id })}
+                              disabled={markPaidMutation.isPending}
+                              data-testid={`button-mark-paid-${assignment.id}`}
+                            >
+                              <CheckCircle className="w-3 h-3 mr-1" />
+                              Marcar Pagado
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="types" className="space-y-4">
           <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -791,6 +981,47 @@ export default function Cuotas() {
               </div>
             </form>
           </Form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={generateDialogOpen} onOpenChange={setGenerateDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmar Generación de Cuotas</DialogTitle>
+            <DialogDescription>
+              Se generarán cuotas mensuales para todos los vecinos activos de la comunidad.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-md border p-4 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Comunidad:</span>
+                <span className="font-medium">{currentCommunity?.name}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Mes/Año:</span>
+                <span className="font-medium">
+                  {["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"][parseInt(selectedMonth)]} {selectedYear}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Cuota por vecino:</span>
+                <span className="font-medium">{currentCommunity?.monthlyFee}€</span>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setGenerateDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={() => generateMonthlyMutation.mutate({ month: selectedMonth, year: selectedYear })}
+              disabled={generateMonthlyMutation.isPending}
+              data-testid="button-confirm-generate"
+            >
+              {generateMonthlyMutation.isPending ? "Generando..." : "Confirmar y Generar"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

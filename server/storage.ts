@@ -122,6 +122,7 @@ export interface IStorage {
   // Quota Type management (community-scoped)
   getQuotaTypes(communityId: string): Promise<QuotaType[]>;
   getQuotaType(id: string, communityId: string): Promise<QuotaType | undefined>;
+  getQuotaTypeByName(communityId: string, name: string): Promise<QuotaType | undefined>;
   createQuotaType(quotaType: InsertQuotaType): Promise<QuotaType>;
   updateQuotaType(id: string, communityId: string, updates: Partial<InsertQuotaType>): Promise<QuotaType | undefined>;
   deleteQuotaType(id: string, communityId: string): Promise<boolean>;
@@ -571,6 +572,13 @@ export class DbStorage implements IStorage {
   async getQuotaType(id: string, communityId: string): Promise<QuotaType | undefined> {
     const result = await db.select().from(quotaTypes)
       .where(and(eq(quotaTypes.id, id), eq(quotaTypes.communityId, communityId)))
+      .limit(1);
+    return result[0];
+  }
+
+  async getQuotaTypeByName(communityId: string, name: string): Promise<QuotaType | undefined> {
+    const result = await db.select().from(quotaTypes)
+      .where(and(eq(quotaTypes.communityId, communityId), eq(quotaTypes.name, name)))
       .limit(1);
     return result[0];
   }
