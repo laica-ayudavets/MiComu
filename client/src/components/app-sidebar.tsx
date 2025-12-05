@@ -178,14 +178,16 @@ export function AppSidebar() {
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive={location === "/configuracion"}>
-              <Link href="/configuracion" data-testid="link-configuracion">
-                <Settings className="w-4 h-4" />
-                <span>Configuración</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          {isAdminFincas && (
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={location === "/configuracion"}>
+                <Link href="/configuracion" data-testid="link-configuracion">
+                  <Settings className="w-4 h-4" />
+                  <span>Configuración</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
           <SidebarMenuItem>
             <SidebarMenuButton onClick={handleLogout} data-testid="button-logout">
               <LogOut className="w-4 h-4" />
