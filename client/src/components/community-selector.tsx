@@ -1,17 +1,27 @@
+import { useState } from "react";
 import { useUser, useCommunities, useCurrentCommunity } from "@/hooks/use-auth";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Building2 } from "lucide-react";
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
+import { Building2, Check, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export function CommunitySelector() {
+  const [open, setOpen] = useState(false);
   const { toast } = useToast();
   const { data: user, isLoading: userLoading } = useUser();
   const { data: communities, isLoading: communitiesLoading } = useCommunities();
@@ -45,6 +55,13 @@ export function CommunitySelector() {
     },
   });
 
+  const handleSelectCommunity = (communityId: string) => {
+    if (communityId !== currentCommunity?.id) {
+      selectCommunityMutation.mutate(communityId);
+    }
+    setOpen(false);
+  };
+
   if (userLoading || communitiesLoading) {
     return null;
   }
@@ -66,29 +83,62 @@ export function CommunitySelector() {
   return (
     <div className="flex items-center gap-2 px-3 py-2">
       <Building2 className="w-4 h-4 text-muted-foreground" />
-      <Select
-        value={currentCommunity?.id || ""}
-        onValueChange={(value) => selectCommunityMutation.mutate(value)}
-        disabled={selectCommunityMutation.isPending}
-      >
-        <SelectTrigger 
-          className="h-8 w-[200px] border-0 focus:ring-0 hover-elevate" 
-          data-testid="select-community"
-        >
-          <SelectValue placeholder="Seleccionar comunidad" />
-        </SelectTrigger>
-        <SelectContent>
-          {communities.map((community) => (
-            <SelectItem 
-              key={community.id} 
-              value={community.id}
-              data-testid={`option-community-${community.id}`}
-            >
-              {community.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="ghost"
+            role="combobox"
+            aria-expanded={open}
+            className="h-8 w-[220px] justify-between border-0 hover-elevate px-2"
+            disabled={selectCommunityMutation.isPending}
+            data-testid="select-community"
+          >
+            <span className="truncate">
+              {currentCommunity?.name || "Seleccionar comunidad"}
+            </span>
+            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[280px] p-0" align="start">
+          <Command>
+            <CommandInput 
+              placeholder="Buscar por nombre o dirección..." 
+              data-testid="input-search-community"
+            />
+            <CommandList>
+              <CommandEmpty>No se encontró ninguna comunidad.</CommandEmpty>
+              <CommandGroup>
+                {communities.map((community) => (
+                  <CommandItem
+                    key={community.id}
+                    value={`${community.name} ${community.address || ""} ${community.city || ""}`}
+                    onSelect={() => handleSelectCommunity(community.id)}
+                    data-testid={`option-community-${community.id}`}
+                    className="cursor-pointer"
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        currentCommunity?.id === community.id
+                          ? "opacity-100"
+                          : "opacity-0"
+                      )}
+                    />
+                    <div className="flex flex-col">
+                      <span className="font-medium">{community.name}</span>
+                      {community.address && (
+                        <span className="text-xs text-muted-foreground">
+                          {community.address}{community.city ? `, ${community.city}` : ""}
+                        </span>
+                      )}
+                    </div>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }
