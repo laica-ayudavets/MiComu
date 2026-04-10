@@ -4,9 +4,11 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/app-sidebar";
 import { SuperadminSidebar } from "@/components/superadmin-sidebar";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { CommunitySelector } from "@/components/community-selector";
 import { useUser } from "@/hooks/use-auth";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
@@ -62,11 +64,12 @@ function AppLayout({ children, variant = "default" }: AppLayoutProps) {
   return (
     <SidebarProvider style={style as React.CSSProperties}>
       <div className="flex h-screen w-full">
-        <SuperadminSidebar />
+        {isSuperadmin ? <SuperadminSidebar /> : <AppSidebar />}
         <div className="flex flex-col flex-1 overflow-hidden">
           <header className="flex items-center justify-between p-3 border-b gap-4">
             <div className="flex items-center gap-2">
               <SidebarTrigger data-testid="button-sidebar-toggle" />
+              {!isSuperadmin && <CommunitySelector />}
             </div>
             <ThemeToggle />
           </header>
@@ -102,7 +105,9 @@ function Router() {
         </AppLayout>
       </Route>
       <Route path="/">
-        <Redirect to="/superadmin" />
+        <AppLayout>
+          <Dashboard />
+        </AppLayout>
       </Route>
       <Route path="/comunidades">
         <AppLayout>
