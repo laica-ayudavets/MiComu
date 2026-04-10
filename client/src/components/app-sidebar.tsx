@@ -9,7 +9,6 @@ import {
   LayoutDashboard,
   Settings,
   CalendarDays,
-  LogOut,
   UserCircle,
   UsersRound,
 } from "lucide-react";
@@ -27,8 +26,6 @@ import {
 } from "@/components/ui/sidebar";
 import { Link, useLocation } from "wouter";
 import { useCurrentCommunity, useUser } from "@/hooks/use-auth";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
 
 const menuItems = [
   {
@@ -87,26 +84,11 @@ const adminMenuItems = [
 ];
 
 export function AppSidebar() {
-  const [location, setLocation] = useLocation();
+  const [location] = useLocation();
   const { data: currentCommunity } = useCurrentCommunity();
   const { data: user } = useUser();
-  const { toast } = useToast();
   
   const isAdminFincas = user?.role === "admin_fincas";
-
-  const handleLogout = async () => {
-    try {
-      await apiRequest("POST", "/api/auth/logout");
-      queryClient.clear();
-      setLocation("/login");
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "No se pudo cerrar la sesión",
-        variant: "destructive",
-      });
-    }
-  };
 
   return (
     <Sidebar>
@@ -188,12 +170,6 @@ export function AppSidebar() {
               </SidebarMenuButton>
             </SidebarMenuItem>
           )}
-          <SidebarMenuItem>
-            <SidebarMenuButton onClick={handleLogout} data-testid="button-logout">
-              <LogOut className="w-4 h-4" />
-              <span>Cerrar Sesión</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
     </Sidebar>

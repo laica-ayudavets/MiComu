@@ -2,7 +2,6 @@ import {
   Building2,
   Users,
   LayoutDashboard,
-  LogOut,
 } from "lucide-react";
 import {
   Sidebar,
@@ -14,11 +13,8 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarHeader,
-  SidebarFooter,
 } from "@/components/ui/sidebar";
 import { Link, useLocation } from "wouter";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
 
 const superadminMenuItems = [
   {
@@ -39,22 +35,7 @@ const superadminMenuItems = [
 ];
 
 export function SuperadminSidebar() {
-  const [location, setLocation] = useLocation();
-  const { toast } = useToast();
-
-  const handleLogout = async () => {
-    try {
-      await apiRequest("POST", "/api/auth/logout");
-      queryClient.clear();
-      setLocation("/login");
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "No se pudo cerrar la sesión",
-        variant: "destructive",
-      });
-    }
-  };
+  const [location] = useLocation();
 
   return (
     <Sidebar>
@@ -88,16 +69,6 @@ export function SuperadminSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="p-4 border-t">
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton onClick={handleLogout} data-testid="button-logout">
-              <LogOut className="w-4 h-4" />
-              <span>Cerrar Sesión</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarFooter>
     </Sidebar>
   );
 }
