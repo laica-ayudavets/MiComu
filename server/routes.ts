@@ -385,11 +385,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Get current user
   app.get("/api/auth/me", (req: Request, res: Response) => {
-    const user = req.user as User;
-    if (!user) {
-      return res.status(500).json({ error: "No superadmin user found" });
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ error: "Not authenticated" });
     }
+
+    const user = req.user as User;
     const { password: _, ...userWithoutPassword } = user;
+    
     const selectedCommunityId = (req.session as any)?.selectedCommunityId;
     
     res.json({

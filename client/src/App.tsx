@@ -1,4 +1,4 @@
-import { Switch, Route, Redirect } from "wouter";
+import { Switch, Route, Redirect, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -10,7 +10,10 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { CommunitySelector } from "@/components/community-selector";
 import { useUser } from "@/hooks/use-auth";
+import { getRoleLandingPath } from "@/lib/role-helpers";
 import NotFound from "@/pages/not-found";
+import Landing from "@/pages/landing";
+import Login from "@/pages/login";
 import Dashboard from "@/pages/dashboard";
 import Comunidades from "@/pages/comunidades";
 import Incidencias from "@/pages/incidencias";
@@ -34,7 +37,7 @@ interface AppLayoutProps {
 }
 
 function AppLayout({ children, variant = "default" }: AppLayoutProps) {
-  const { data: user, isLoading, error } = useUser();
+  const { data: user, isLoading } = useUser();
   const isSuperadmin = variant === "superadmin";
 
   if (isLoading) {
@@ -45,15 +48,16 @@ function AppLayout({ children, variant = "default" }: AppLayoutProps) {
     );
   }
 
-  if (!user || error) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <div className="text-center space-y-2">
-          <p className="text-destructive font-medium" data-testid="text-auth-error">Error al cargar el usuario</p>
-          <p className="text-sm text-muted-foreground">No se pudo conectar con el servidor. Recarga la página para intentarlo de nuevo.</p>
-        </div>
-      </div>
-    );
+  if (!user) {
+    return <Redirect to="/login" />;
+  }
+
+  if (isSuperadmin && user.role !== "superadmin") {
+    return <Redirect to="/" />;
+  }
+
+  if (!isSuperadmin && user.role === "superadmin") {
+    return <Redirect to={getRoleLandingPath(user)} />;
   }
 
   const style = {
@@ -83,12 +87,8 @@ function AppLayout({ children, variant = "default" }: AppLayoutProps) {
 function Router() {
   return (
     <Switch>
-      <Route path="/login">
-        <Redirect to="/superadmin" />
-      </Route>
-      <Route path="/landing">
-        <Redirect to="/superadmin" />
-      </Route>
+      <Route path="/login" component={Login} />
+      <Route path="/landing" component={Landing} />
       <Route path="/superadmin">
         <AppLayout variant="superadmin">
           <SuperadminDashboard />

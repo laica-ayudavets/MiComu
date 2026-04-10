@@ -33,7 +33,7 @@ The backend uses Node.js with Express.js and TypeScript, providing a RESTful API
 
 ## System Design Choices
 
-The application has no login page. All requests are automatically authenticated as the Superadmin user via backend middleware that populates `req.user` with the superadmin record on every request. The `requireAuth` and `requireRole` middleware are passthrough (always allow). The frontend redirects `/login`, `/landing`, and `/` to `/superadmin`. There are no logout buttons. The superadmin user is seeded on startup with password auto-repair.
+The application implements automatic role-based redirects post-login to ensure users land on their respective dashboards. Test credentials are pre-configured for all roles, and the system includes password auto-repair on startup.
 
 # External Dependencies
 
