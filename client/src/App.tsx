@@ -32,7 +32,7 @@ interface AppLayoutProps {
 }
 
 function AppLayout({ children, variant = "default" }: AppLayoutProps) {
-  const { data: user, isLoading } = useUser();
+  const { data: user, isLoading, error } = useUser();
   const isSuperadmin = variant === "superadmin";
 
   if (isLoading) {
@@ -43,10 +43,13 @@ function AppLayout({ children, variant = "default" }: AppLayoutProps) {
     );
   }
 
-  if (!user) {
+  if (!user || error) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="text-center space-y-2">
+          <p className="text-destructive font-medium" data-testid="text-auth-error">Error al cargar el usuario</p>
+          <p className="text-sm text-muted-foreground">No se pudo conectar con el servidor. Recarga la página para intentarlo de nuevo.</p>
+        </div>
       </div>
     );
   }
